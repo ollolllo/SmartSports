@@ -1,0 +1,234 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f8ff;
+    color: #333;
+}
+
+.game-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    text-align: center;
+}
+
+h1 {
+    color: #2c3e50;
+    margin-bottom: 30px;
+}
+
+.game-section {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 30px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+.game-area {
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+#gameCanvas {
+    background-color: #e8f4f8;
+    border-radius: 5px;
+}
+
+.camera-section {
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 10px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+#cameraFeed {
+    border-radius: 5px;
+    border: 2px solid #3498db;
+}
+
+.game-info {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.gesture-display {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 30px;
+    gap: 20px;
+}
+
+.gesture-label {
+    background-color: #fff;
+    padding: 15px 30px;
+    border-radius: 25px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    font-size: 18px;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.gesture-status {
+    background-color: #fff;
+    padding: 15px 30px;
+    border-radius: 25px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    font-size: 18px;
+    font-weight: bold;
+    color: #e74c3c;
+    min-width: 200px;
+}
+
+.gesture-status.active {
+    color: #27ae60;
+}
+
+.score, .timer, .status {
+    background-color: #fff;
+    padding: 15px 30px;
+    border-radius: 25px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#status {
+    color: #e74c3c;
+}
+
+.controls {
+    margin-bottom: 30px;
+}
+
+button {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 12px 30px;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 0 10px;
+    transition: all 0.3s ease;
+}
+
+button:hover {
+    background-color: #2980b9;
+    transform: translateY(-2px);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.result {
+    background-color: #fff;
+    padding: 40px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.2);
+    margin-top: 30px;
+}
+
+.result h2 {
+    color: #27ae60;
+    margin-bottom: 20px;
+}
+
+.result p {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+#finalScore, #accuracy {
+    font-weight: bold;
+    color: #3498db;
+    font-size: 24px;
+}
+
+@media (max-width: 768px) {
+    .game-section {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .game-info {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    #gameCanvas {
+        width: 100%;
+        max-width: 600px;
+        height: auto;
+    }
+    
+    #cameraFeed {
+        width: 100%;
+        max-width: 400px;
+        height: auto;
+    }
+}
+
+.frog {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background-color: #27ae60;
+    border-radius: 50% 50% 20% 20%;
+    transition: all 0.3s ease;
+}
+
+.frog::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: 10px;
+    width: 8px;
+    height: 8px;
+    background-color: black;
+    border-radius: 50%;
+    box-shadow: 20px 0 0 black;
+}
+
+.frog::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 18px;
+    width: 12px;
+    height: 8px;
+    background-color: #e74c3c;
+    border-radius: 50%;
+}
+
+.lilypad {
+    position: absolute;
+    width: 80px;
+    height: 20px;
+    background-color: #27ae60;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.obstacle {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background-color: #e74c3c;
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}

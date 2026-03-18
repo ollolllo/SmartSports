@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>金元宝和石头 - 智能体育小游戏</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <script>
+        // 表情图片对象
+        const expressions = {
+            default: "/imgs/1.png",
+            happy: "/imgs/4.png",
+            proud: "/imgs/5.png",
+            crying: "/imgs/3.png"
+        };
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            overflow: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-image: linear-gradient(to bottom, #87CEEB, #E0F7FA);
+            display: flex;
+            flex-direction: column;
+            min-height: 600px;
+        }
+
+        .game-title {
+            position: absolute;
+            top: 2%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 3vw;
+            font-weight: bold;
+            color: #333;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            z-index: 20;
+        }
+
+        .game-area {
+            position: relative;
+            width: 100%;
+            flex: 1;
+        }
+
+        .character {
+            position: absolute;
+            bottom: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 8vw;
+            max-width: 100px;
+            height: 12vw;
+            max-height: 150px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-color: transparent;
+            z-index: 10;
+        }
+
+        .object {
+            position: absolute;
+            width: 3vw;
+            max-width: 40px;
+            height: 3vw;
+            max-height: 40px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            z-index: 5;
+        }
+
+        .gold {
+            background-image: url('https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=gold%20ingot%2C%20cartoon%20style%2C%20simple&image_size=square');
+        }
+
+        .stone {
+            background-image: url('https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=stone%2C%20cartoon%20style%2C%20simple&image_size=square');
+        }
+
+        .弹幕 {
+            position: absolute;
+            font-size: 3vw;
+            font-weight: bold;
+            color: #ff4500;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 20;
+            animation: float-up 2s ease-out forwards;
+        }
+
+        @keyframes float-up {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px);
+            }
+        }
+
+        .start-button {
+            position: absolute;
+            top: 2%;
+            left: 2%;
+            height: 40px;
+            padding: 0 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 9999;
+            min-width: 100px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            line-height: 40px;
+        }
+
+        .camera-container {
+            position: absolute;
+            top: 2%;
+            right: 2%;
+            width: 15vw;
+            max-width: 200px;
+            height: 11.25vw;
+            max-height: 150px;
+            background: #000;
+            border-radius: 5px;
+            overflow: hidden;
+            z-index: 20;
+        }
+
+        #camera {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        .action-display {
+            position: absolute;
+            top: 2%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            z-index: 100;
+        }
+
+        .start-button:hover {
+            background: #45a049;
+        }
+
+        /* 滑动图片样式 */
+        .sliding-image {
+            position: absolute;
+            bottom: 10%;
+            left: -200px;
+            width: 100px;
+            height: 100px;
+            object-fit: contain;
+            background-color: transparent;
+            z-index: 10;
+            transition: left 3s ease-in-out;
+        }
+
+        /* 确保在所有屏幕尺寸上都能正常显示 */
+        @media (max-width: 1920px) {
+            .start-button {
+                bottom: 30px;
+                font-size: 20px;
+                padding: 18px 36px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .start-button {
+                bottom: 40px;
+                font-size: 18px;
+                padding: 16px 32px;
+            }
+            
+
+        }
+
+        @media (max-width: 480px) {
+            .start-button {
+                bottom: 50px;
+                font-size: 16px;
+                padding: 14px 28px;
+            }
+            
+
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1 class="game-title">金元宝和石头</h1>
+        
+        <div class="camera-container">
+            <video id="camera" autoplay playsinline></video>
+        </div>
+        
+        <div id="action-display" class="action-display">等待识别...</div>
+        
+
+        
+        <div class="game-area">
+            <div class="character" id="character">
+                <img id="expression-image" src="" alt="表情" style="width: 100%; height: 100%; object-fit: contain; background-color: transparent;">
+            </div>
+            <!-- 滑动图片 -->
+            <img id="sliding-image" src="https://192.168.13.135/imgs/6.png" alt="滑动图片" class="sliding-image">
+        </div>
+        
+        <button class="start-button" id="start-button">开始游戏</button>
+    </div>
+
+    <script>
+        // 游戏状态
+        let gameRunning = false;
+        let objects = [];
+        let currentAction = "";
+        let isUsingMockData = false;
+        
+        // 游戏参数
+        const gameArea = document.querySelector('.game-area');
+        const character = document.getElementById('character');
+        const expressionImage = document.getElementById('expression-image');
+        const startButton = document.getElementById('start-button');
+        
+        // 动作识别相关
+        let actionCapture = null;
+        
+        // 初始化游戏
+        function initGame() {
+            startButton.addEventListener('click', toggleGame);
+            
+            // 初始化默认表情
+            if (expressionImage) {
+                console.log('初始化默认表情');
+                console.log('expressions对象:', expressions);
+                console.log('expressions.default:', expressions.default);
+                expressionImage.src = expressions.default;
+                character.style.width = "8vw";
+                character.style.maxWidth = "100px";
+                character.style.height = "12vw";
+                character.style.maxHeight = "150px";
+                character.style.backgroundColor = "transparent";
+            }
+            
+            // 初始化动作捕捉
+            actionCapture = new ActionCapture();
+        }
+        
+        // 模拟动作数据
+        function startMockActionData() {
+            isUsingMockData = true;
+            console.log('开始使用模拟动作数据');
+            
+            const actions = ['站立', '举起双手', '双手抱头', '举起右手'];
+            let currentIndex = 0;
+            
+            setInterval(() => {
+                currentAction = actions[currentIndex];
+                currentIndex = (currentIndex + 1) % actions.length;
+                console.log('模拟动作:', currentAction);
+                
+                // 更新动作显示
+                const actionDisplay = document.getElementById('action-display');
+                if (actionDisplay) {
+                    actionDisplay.textContent = currentAction;
+                }
+            }, 3000);
+        }
+        
+        class ActionCapture {
+            constructor() {
+                this.videoElement = document.getElementById('camera');
+                this.actionDisplay = document.getElementById('action-display');
+                
+                this.isCameraStarted = false;
+                this.isRecognizing = false;
+                this.pose = null;
+                this.camera = null;
+                
+                // 头部位置历史，用于检测摇头动作
+                this.headPositionHistory = [];
+                this.maxHeadHistoryPoints = 20;
+                // 垂直位置历史，用于检测跳跃动作
+                this.verticalPositionHistory = [];
+                this.maxVerticalHistoryPoints = 30;
+
+                this.init();
+            }
+
+            init() {
+                this.setupCamera();
+            }
+
+            async setupCamera() {
+                if (this.isCameraStarted) return;
+
+                try {
+                    console.log('开始设置摄像头');
+                    this.actionDisplay.textContent = '正在设置摄像头...';
+
+                    // 检查navigator.mediaDevices是否可用
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('浏览器不支持摄像头访问');
+                    }
+
+                    // 尝试获取摄像头设备列表
+                    console.log('正在获取摄像头设备列表');
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    console.log('找到的摄像头设备:', videoDevices);
+
+                    if (videoDevices.length === 0) {
+                        throw new Error('未找到摄像头设备');
+                    }
+
+                    // 先获取摄像头流，确保摄像头可以访问
+                    console.log('正在请求摄像头权限');
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: 640,
+                            height: 480,
+                            deviceId: videoDevices[0].deviceId
+                        },
+                        audio: false
+                    });
+                    console.log('摄像头权限获取成功');
+
+                    // 设置视频源
+                    this.videoElement.srcObject = stream;
+                    console.log('视频源设置成功');
+
+                    // 当视频元数据加载完成后开始播放
+                    this.videoElement.onloadedmetadata = async () => {
+                        try {
+                            console.log('视频元数据加载完成，开始播放');
+                            await this.videoElement.play();
+                            console.log('视频播放成功');
+                            this.actionDisplay.textContent = '摄像头已就绪';
+
+                            // 初始化MediaPipe Pose
+                            console.log('开始初始化MediaPipe Pose');
+                            this.pose = new Pose({
+                                locateFile: (file) => {
+                                    return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+                                }
+                            });
+
+                            this.pose.setOptions({
+                                modelComplexity: 1,
+                                smoothLandmarks: true,
+                                enableSegmentation: false,
+                                smoothSegmentation: false,
+                                minDetectionConfidence: 0.5,
+                                minTrackingConfidence: 0.5
+                            });
+
+                            this.pose.onResults((results) => this.onPoseResults(results));
+
+                            // 等待模型加载
+                            await this.pose.initialize();
+                            console.log('MediaPipe Pose初始化成功');
+
+                            this.isCameraStarted = true;
+                            this.isRecognizing = true;
+                            
+                            // 开始处理每一帧
+                            const processFrame = async () => {
+                                if (this.isRecognizing && this.videoElement.readyState === 4) {
+                                    await this.pose.send({image: this.videoElement});
+                                }
+                                requestAnimationFrame(processFrame);
+                            };
+                            processFrame();
+                            console.log('开始处理视频帧');
+
+                        } catch (playError) {
+                            console.error('视频播放失败:', playError);
+                            this.actionDisplay.textContent = '视频播放失败';
+                        }
+                    };
+
+                    // 处理视频错误
+                    this.videoElement.onerror = (error) => {
+                        console.error('视频元素错误:', error);
+                        this.actionDisplay.textContent = '视频元素错误';
+                    };
+                    
+                } catch (error) {
+                    console.error('设置失败:', error);
+                    this.actionDisplay.textContent = '摄像头访问失败: ' + error.message + '，使用模拟数据';
+                    // 即使摄像头失败，也让游戏可以运行
+                    this.isCameraStarted = false;
+                    this.isRecognizing = false;
+                    // 启动模拟动作数据
+                    startMockActionData();
+                }
+            }
+
+            onPoseResults(results) {
+                if (results.poseLandmarks) {
+                    // 更新头部位置历史
+                    this.updateHeadPositionHistory(results.poseLandmarks);
+                    // 更新垂直位置历史
+                    this.updateVerticalPositionHistory(results.poseLandmarks);
+                    
+                    this.recognizeAction(results.poseLandmarks);
+                }
+            }
+
+            updateHeadPositionHistory(landmarks) {
+                const nose = landmarks[0];
+                if (nose) {
+                    this.headPositionHistory.push({
+                        x: nose.x,
+                        y: nose.y,
+                        timestamp: Date.now()
+                    });
+
+                    // 保持历史记录在合理范围内
+                    if (this.headPositionHistory.length > this.maxHeadHistoryPoints) {
+                        this.headPositionHistory.shift();
+                    }
+                }
+            }
+
+            updateVerticalPositionHistory(landmarks) {
+                const nose = landmarks[0];
+                if (nose) {
+                    this.verticalPositionHistory.push({
+                        y: nose.y,
+                        timestamp: Date.now()
+                    });
+
+                    // 保持历史记录在合理范围内
+                    if (this.verticalPositionHistory.length > this.maxVerticalHistoryPoints) {
+                        this.verticalPositionHistory.shift();
+                    }
+                }
+            }
+
+            detectHeadShake() {
+                if (this.headPositionHistory.length < 10) {
+                    return false;
+                }
+
+                const xValues = this.headPositionHistory.map(pos => pos.x);
+                const minX = Math.min(...xValues);
+                const maxX = Math.max(...xValues);
+                const xRange = maxX - minX;
+
+                let directionChanges = 0;
+                let lastDirection = null;
+
+                for (let i = 1; i < this.headPositionHistory.length; i++) {
+                    const currentX = this.headPositionHistory[i].x;
+                    const previousX = this.headPositionHistory[i-1].x;
+                    const direction = currentX > previousX ? 'right' : 'left';
+
+                    if (lastDirection && direction !== lastDirection) {
+                        directionChanges++;
+                    }
+                    lastDirection = direction;
+                }
+
+                const recentHistory = this.headPositionHistory.filter(pos => 
+                    Date.now() - pos.timestamp < 2000
+                );
+
+                return xRange > 0.1 && 
+                       directionChanges >= 3 && 
+                       recentHistory.length >= 8;
+            }
+
+            detectJump(landmarks) {
+                // 简化的跳跃检测
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                
+                if (!leftHip || !rightHip) {
+                    return false;
+                }
+                
+                // 跳跃时身体会上升，髋部位置会升高
+                const hipY = (leftHip.y + rightHip.y) / 2;
+                return hipY < 0.4; // 髋部位置明显升高
+            }
+
+            recognizeAction(landmarks) {
+                // 获取关键点
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftWrist = landmarks[15];
+                const rightWrist = landmarks[16];
+                const nose = landmarks[0];
+
+                // 只需要核心点
+                if (!leftShoulder || !rightShoulder || !leftWrist || !rightWrist || !nose) {
+                    currentAction = "未检测到完整姿态";
+                    this.updateActionDisplay();
+                    return;
+                }
+
+                // 计算距离的辅助函数
+                const calculateDistance = (point1, point2) => {
+                    return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
+                };
+
+                // 计算肩膀宽度（用于动态阈值）
+                const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+                const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+
+                // 判断手臂是否抬起（手腕Y坐标小于肩膀Y坐标表示抬起）
+                // 注意：MediaPipe的Y坐标是归一化的，0在顶部，1在底部
+                const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
+                const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+
+                // 检测动作
+                let detectedAction = '站立';
+
+                // 1. 跳跃
+                if (this.detectJump(landmarks)) {
+                    detectedAction = '跳起来';
+                }
+                // 2. 双手抱头
+                else {
+                    const leftWristToNose = calculateDistance(leftWrist, nose);
+                    const rightWristToNose = calculateDistance(rightWrist, nose);
+                    if (leftWristToNose < 0.3 && rightWristToNose < 0.3) {
+                        detectedAction = '双手抱头';
+                    }
+                    // 3. 举起双手
+                    else if (leftArmRaised && rightArmRaised) {
+                        detectedAction = '举起双手';
+                    }
+                    // 4. 举起右手
+                    else if (rightArmRaised && !leftArmRaised) {
+                        detectedAction = '举起右手';
+                    }
+                }
+
+                currentAction = detectedAction;
+                this.updateActionDisplay();
+
+                // 游戏未开始时，检测举起右手自动开始游戏
+                if (!gameRunning && rightShoulder && rightWrist && leftShoulder && leftWrist && nose) {
+                    // 只有检测到"举起右手"动作时才开始游戏
+                    if (detectedAction === '举起右手') {
+                        toggleGame();
+                    }
+                }
+            }
+
+            updateActionDisplay() {
+                if (this.actionDisplay) {
+                    this.actionDisplay.textContent = currentAction;
+                }
+            }
+        }
+        
+        // 切换游戏状态
+        function toggleGame() {
+            gameRunning = !gameRunning;
+            
+            if (gameRunning) {
+                startButton.textContent = "停止游戏";
+                startButton.style.background = "#f44336";
+                startGame();
+            } else {
+                startButton.textContent = "开始游戏";
+                startButton.style.background = "#4CAF50";
+                stopGame();
+            }
+        }
+        
+        // 开始游戏
+        function startGame() {
+            objects = [];
+            gameLoop();
+            spawnObjects();
+        }
+        
+        // 停止游戏
+        function stopGame() {
+            // 清空所有物体
+            objects.forEach(obj => {
+                if (obj.element) {
+                    gameArea.removeChild(obj.element);
+                }
+            });
+            objects = [];
+        }
+        
+        // 游戏主循环
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            // 更新物体位置
+            updateObjects();
+            
+            // 检测碰撞
+            checkCollisions();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 生成物体
+        function spawnObjects() {
+            if (!gameRunning) return;
+            
+            // 获取小孩位置，确保物体落在小孩头上
+            const characterRect = character.getBoundingClientRect();
+            const gameAreaRect = gameArea.getBoundingClientRect();
+            const characterCenterX = characterRect.left - gameAreaRect.left + characterRect.width / 2;
+            
+            // 随机在小孩头部区域生成物体
+            const object = {
+                type: Math.random() > 0.5 ? 'gold' : 'stone',
+                x: characterCenterX + (Math.random() * 60 - 30), // 在小孩头部左右30px范围内
+                y: -40,
+                speed: Math.random() * 12 + 12, // 速度在12-24之间，加快6倍（比初始速度快6倍）
+                element: null
+            };
+            
+            // 确保物体在游戏区域内
+            if (object.x < 0) object.x = 0;
+            if (object.x > gameArea.offsetWidth - 40) object.x = gameArea.offsetWidth - 40;
+            
+            // 创建物体元素
+            const objElement = document.createElement('div');
+            objElement.className = `object ${object.type}`;
+            objElement.style.left = `${object.x}px`;
+            objElement.style.top = `${object.y}px`;
+            gameArea.appendChild(objElement);
+            
+            object.element = objElement;
+            objects.push(object);
+            
+            // 确保相邻两个物体间隔足够大，保证高度差至少三分之一屏幕高度
+            setTimeout(spawnObjects, Math.random() * 1000 + 2500); // 2500-3500ms的间隔
+        }
+        
+        // 更新物体位置
+        function updateObjects() {
+            objects.forEach((obj, index) => {
+                obj.y += obj.speed;
+                obj.element.style.top = `${obj.y}px`;
+                
+                // 移除超出屏幕的物体
+                if (obj.y > gameArea.offsetHeight) {
+                    gameArea.removeChild(obj.element);
+                    objects.splice(index, 1);
+                }
+            });
+        }
+        
+        // 检测碰撞
+        function checkCollisions() {
+            const characterRect = character.getBoundingClientRect();
+            const gameAreaRect = gameArea.getBoundingClientRect();
+            
+            objects.forEach((obj, index) => {
+                const objRect = obj.element.getBoundingClientRect();
+                
+                // 检查是否碰撞到角色头部
+                if (obj.y + 40 >= characterRect.top - gameAreaRect.top &&
+                    obj.x + 40 >= characterRect.left - gameAreaRect.left &&
+                    obj.x <= characterRect.right - gameAreaRect.left) {
+                    
+                    // 处理碰撞
+                    handleCollision(obj);
+                    
+                    // 移除物体
+                    gameArea.removeChild(obj.element);
+                    objects.splice(index, 1);
+                }
+            });
+        }
+        
+        // 处理碰撞
+        function handleCollision(obj) {
+            let message = "";
+            console.log("碰撞检测 - 物体类型:", obj.type, "当前动作:", currentAction);
+            
+            // 确保character元素存在
+            if (!character) {
+                console.error("character元素不存在");
+                return;
+            }
+            
+            if (obj.type === 'gold') {
+                // 金元宝 + 双手举起
+                if (currentAction === "举起双手") {
+                    message = "赞";
+                    console.log("显示弹幕: 赞");
+                    console.log("切换到开心表情");
+                    // 改变为开心的表情
+                    if (expressionImage) {
+                        expressionImage.src = expressions.happy;
+                        character.style.width = "8vw";
+                        character.style.maxWidth = "100px";
+                        character.style.height = "12vw";
+                        character.style.maxHeight = "150px";
+                        character.style.backgroundColor = "transparent";
+                    }
+                } else {
+                    console.log("金元宝落下但动作不是举起双手，不显示弹幕");
+                }
+            } else {
+                // 石头 + 双手抱头
+                if (currentAction === "双手抱头") {
+                    message = "你真棒";
+                    console.log("显示弹幕: 你真棒");
+                    console.log("切换到得意表情");
+                    // 改变为得意的表情
+                    if (expressionImage) {
+                        expressionImage.src = expressions.proud;
+                        character.style.width = "8vw";
+                        character.style.maxWidth = "100px";
+                        character.style.height = "12vw";
+                        character.style.maxHeight = "150px";
+                        character.style.backgroundColor = "transparent";
+                    }
+                } else {
+                    message = "好痛啊";
+                    console.log("显示弹幕: 好痛啊");
+                    console.log("切换到哭的表情");
+                    // 改变为哭的表情，带眼泪
+                    if (expressionImage) {
+                        expressionImage.src = expressions.crying;
+                        character.style.width = "8vw";
+                        character.style.maxWidth = "100px";
+                        character.style.height = "12vw";
+                        character.style.maxHeight = "150px";
+                        character.style.backgroundColor = "transparent";
+                    }
+                }
+            }
+            
+            // 显示弹幕
+            if (message) {
+                showMessage(message);
+            }
+            
+            // 2秒后恢复默认表情
+            setTimeout(() => {
+                console.log("恢复默认表情");
+                if (expressionImage) {
+                    expressionImage.src = expressions.default;
+                    character.style.width = "8vw";
+                    character.style.maxWidth = "100px";
+                    character.style.height = "12vw";
+                    character.style.maxHeight = "150px";
+                    character.style.backgroundColor = "transparent";
+                }
+            }, 2000);
+        }
+        
+        // 显示弹幕
+        function showMessage(text) {
+            const messageElement = document.createElement('div');
+            messageElement.className = '弹幕';
+            messageElement.textContent = text;
+            messageElement.style.left = `${Math.random() * (gameArea.offsetWidth - 100) + 50}px`;
+            messageElement.style.bottom = '200px';
+            
+            gameArea.appendChild(messageElement);
+            
+            // 2秒后移除
+            setTimeout(() => {
+                if (messageElement.parentNode) {
+                    messageElement.parentNode.removeChild(messageElement);
+                }
+            }, 2000);
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('DOMContentLoaded', function() {
+            initGame();
+            initSliding();
+        });
+        
+        // 初始化滑动效果
+        function initSliding() {
+            const slidingImage = document.getElementById('sliding-image');
+            if (!slidingImage) return;
+            
+            const gameArea = document.querySelector('.game-area');
+            const expressionImage = document.getElementById('expression-image');
+            const originalImageSrc = expressionImage ? expressionImage.src : '';
+            let isSwitched = false;
+            
+            // 碰撞检测函数
+            function checkCollision() {
+                if (!slidingImage || !expressionImage) return;
+                
+                const slidingRect = slidingImage.getBoundingClientRect();
+                const expressionRect = expressionImage.getBoundingClientRect();
+                
+                // 检测两个元素是否相交
+                const isColliding = !(slidingRect.right < expressionRect.left || 
+                                     slidingRect.left > expressionRect.right || 
+                                     slidingRect.bottom < expressionRect.top || 
+                                     slidingRect.top > expressionRect.bottom);
+                
+                if (isColliding && !isSwitched) {
+                    // 切换到2.png
+                    expressionImage.src = '/imgs/2.png';
+                    isSwitched = true;
+                    
+                    // 2秒后恢复默认图片
+                    setTimeout(() => {
+                        expressionImage.src = originalImageSrc;
+                        isSwitched = false;
+                    }, 2000);
+                }
+            }
+            
+            // 滑动函数
+            function slideIn() {
+                // 重置位置到左侧屏幕外
+                slidingImage.style.transition = 'none';
+                slidingImage.style.left = '-200px';
+                isSwitched = false;
+                
+                // 强制重排
+                slidingImage.offsetHeight;
+                
+                // 计算滑动到右侧屏幕外的位置
+                const targetPosition = gameArea.offsetWidth + 200;
+                
+                // 开始滑动
+                slidingImage.style.transition = 'left 6s ease-in-out';
+                slidingImage.style.left = targetPosition + 'px';
+                
+                // 定期检查碰撞
+                const collisionCheckInterval = setInterval(checkCollision, 100);
+                
+                // 随机间隔时间（10秒到30秒）
+                const interval = Math.random() * 20000 + 10000; // 10000ms到30000ms
+                
+                // 等待滑动动画完成后，再设置下一次滑动
+                setTimeout(() => {
+                    clearInterval(collisionCheckInterval);
+                    slideIn();
+                }, interval);
+            }
+            
+            // 初始滑动
+            setTimeout(slideIn, 1000); // 页面加载后1秒开始滑动
+        }
+    </script>
+    
+</body>
+</html>

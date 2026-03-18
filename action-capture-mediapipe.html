@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动作捕捉与轨迹追踪 - MediaPipe</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+
+        .main-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .camera-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 400px;
+            max-width: 600px;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #startCameraBtn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #startCameraBtn:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+
+        #resetBtn {
+            background-color: #f44336;
+            color: white;
+        }
+
+        #resetBtn:hover:not(:disabled) {
+            background-color: #da190b;
+        }
+
+        #startRecognitionBtn {
+            background-color: #3498db;
+            color: white;
+        }
+
+        #startRecognitionBtn:hover:not(:disabled) {
+            background-color: #2980b9;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        video, canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .info-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 300px;
+            max-width: 400px;
+        }
+
+        .info-item {
+            margin-bottom: 20px;
+        }
+
+        .info-item h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #34495e;
+        }
+
+        .status-text {
+            font-size: 16px;
+            color: #7f8c8d;
+            min-height: 20px;
+        }
+
+        .action-name {
+            font-size: 24px;
+            font-weight: bold;
+            min-height: 30px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+        }
+
+        .action-name.both-hands {
+            background-color: #9b59b6;
+            color: white;
+        }
+
+        .action-name.right-hand {
+            background-color: #34495e;
+            color: white;
+        }
+
+        .action-name.left-hand {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .action-name.hands-on-head {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .action-name.hands-on-hips {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .action-name.arms-bent {
+            background-color: #1abc9c;
+            color: white;
+        }
+
+        .action-name.left-arm-bent {
+            background-color: #16a085;
+            color: white;
+        }
+
+        .action-name.right-arm-bent {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .action-name.arms-extended {
+            background-color: #9b59b6;
+            color: white;
+        }
+
+        .action-name.hands-together {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .action-name.squat {
+            background-color: #f1c40f;
+            color: white;
+        }
+
+        .action-name.kick-left {
+            background-color: #e67e22;
+            color: white;
+        }
+
+        .action-name.kick-right {
+            background-color: #d35400;
+            color: white;
+        }
+
+        .action-name.stand-left {
+            background-color: #2980b9;
+            color: white;
+        }
+
+        .action-name.stand-right {
+            background-color: #34495e;
+            color: white;
+        }
+
+        .action-name.bend {
+            background-color: #16a085;
+            color: white;
+        }
+
+        .action-name.bow {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .action-name.wave {
+            background-color: #8e44ad;
+            color: white;
+        }
+
+        .action-name.head-shake {
+            background-color: #e74c3c;
+            color: white;
+        }
+
+        .action-name.jump {
+            background-color: #9b59b6;
+            color: white;
+        }
+
+        .action-name.stand {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .action-name.sit {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .action-name.head-nod {
+            background-color: #f39c12;
+            color: white;
+        }
+
+        .action-name.head-up {
+            background-color: #1abc9c;
+            color: white;
+        }
+
+        .action-name.head-down {
+            background-color: #e67e22;
+            color: white;
+        }
+
+        .action-name.walk {
+            background-color: #34495e;
+            color: white;
+        }
+
+        .action-name.run {
+            background-color: #c0392b;
+            color: white;
+        }
+
+        .trajectory-info {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .debug-info {
+            font-size: 12px;
+            color: #666;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .camera-section,
+            .info-section {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>动作捕捉与轨迹追踪 - MediaPipe</h1>
+        
+        <div class="main-content">
+            <div class="camera-section">
+                <div class="controls">
+                    <button id="startCameraBtn">启动摄像头</button>
+                    <button id="startRecognitionBtn" disabled>开始识别</button>
+                    <button id="resetBtn" disabled>重置</button>
+                </div>
+                
+                <div class="camera-container">
+                    <video id="cameraFeed" autoplay muted playsinline></video>
+                    <canvas id="trackerCanvas"></canvas>
+                    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <div>正在加载MediaPipe模型...</div>
+                    </div>
+                </div>
+                
+                <div class="debug-info" id="debugInfo">
+                    等待启动...
+                </div>
+            </div>
+            
+            <div class="info-section">
+                <div class="info-item">
+                    <h2>状态</h2>
+                    <div id="statusText" class="status-text">准备就绪，请启动摄像头</div>
+                </div>
+                
+                <div class="info-item">
+                    <h2>识别动作</h2>
+                    <div id="actionName" class="action-name">等待识别...</div>
+                </div>
+                
+                <div class="info-item">
+                    <h2>轨迹信息</h2>
+                    <div id="trajectoryInfo" class="trajectory-info">
+                        左腕轨迹点: 0<br>
+                        右腕轨迹点: 0
+                    </div>
+                </div>
+                
+                <div class="info-item">
+                    <h2>使用说明</h2>
+                    <div style="font-size: 14px; color: #666; line-height: 1.6;">
+                        1. 点击"启动摄像头"开启相机<br>
+                        2. 等待MediaPipe模型加载完成<br>
+                        3. 点击"开始识别"开始动作捕捉<br>
+                        4. 举起左手、右手或双手进行测试<br>
+                        5. 确保身体在摄像头视野内
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ActionCapture {
+            constructor() {
+                this.videoElement = document.getElementById('cameraFeed');
+                this.canvasElement = document.getElementById('trackerCanvas');
+                this.canvasCtx = this.canvasElement.getContext('2d');
+                this.actionNameElement = document.getElementById('actionName');
+                this.statusTextElement = document.getElementById('statusText');
+                this.trajectoryInfoElement = document.getElementById('trajectoryInfo');
+                this.debugInfoElement = document.getElementById('debugInfo');
+                this.startCameraBtn = document.getElementById('startCameraBtn');
+                this.startRecognitionBtn = document.getElementById('startRecognitionBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+                this.loadingOverlay = document.getElementById('loadingOverlay');
+
+                this.isCameraStarted = false;
+                this.isRecognizing = false;
+                this.pose = null;
+                this.camera = null;
+                
+                // 轨迹数据
+                this.trajectoryData = {
+                    leftWrist: [],
+                    rightWrist: []
+                };
+                this.maxTrajectoryPoints = 30;
+
+                // 动作识别状态
+                this.currentAction = '';
+                this.actionStartTime = 0;
+                this.actionConfidence = 0;
+                
+                // 头部位置历史，用于检测摇头动作
+                this.headPositionHistory = [];
+                this.maxHeadHistoryPoints = 20;
+
+                this.init();
+            }
+
+            init() {
+                this.startCameraBtn.addEventListener('click', () => this.setupCamera());
+                this.startRecognitionBtn.addEventListener('click', () => this.toggleRecognition());
+                this.resetBtn.addEventListener('click', () => this.reset());
+                this.updateStatus('准备就绪，请启动摄像头');
+            }
+
+            async setupCamera() {
+                if (this.isCameraStarted) return;
+
+                try {
+                    this.updateStatus('正在加载MediaPipe模型...');
+                    this.loadingOverlay.style.display = 'flex';
+                    this.startCameraBtn.disabled = true;
+
+                    // 初始化MediaPipe Pose
+                    this.pose = new Pose({
+                        locateFile: (file) => {
+                            return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+                        }
+                    });
+
+                    this.pose.setOptions({
+                        modelComplexity: 1,
+                        smoothLandmarks: true,
+                        enableSegmentation: false,
+                        smoothSegmentation: false,
+                        minDetectionConfidence: 0.5,
+                        minTrackingConfidence: 0.5
+                    });
+
+                    this.pose.onResults((results) => this.onPoseResults(results));
+
+                    // 等待模型加载
+                    await this.pose.initialize();
+
+                    // 设置摄像头
+                    this.camera = new Camera(this.videoElement, {
+                        onFrame: async () => {
+                            await this.pose.send({image: this.videoElement});
+                        },
+                        width: 640,
+                        height: 480
+                    });
+
+                    await this.camera.start();
+                    
+                    this.isCameraStarted = true;
+                    this.loadingOverlay.style.display = 'none';
+                    this.startRecognitionBtn.disabled = false;
+                    this.resetBtn.disabled = false;
+                    this.updateStatus('摄像头已启动，点击"开始识别"开始动作捕捉');
+                    
+                } catch (error) {
+                    console.error('设置失败:', error);
+                    this.loadingOverlay.style.display = 'none';
+                    this.startCameraBtn.disabled = false;
+                    this.updateStatus('启动失败: ' + error.message);
+                }
+            }
+
+            onPoseResults(results) {
+                // 调整画布尺寸
+                this.canvasElement.width = this.videoElement.videoWidth || 640;
+                this.canvasElement.height = this.videoElement.videoHeight || 480;
+                
+                // 清空画布
+                this.canvasCtx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+                
+                if (results.poseLandmarks) {
+                    // 绘制姿态
+                    this.drawPose(results.poseLandmarks);
+                    
+                    // 如果正在识别，进行动作识别
+                    if (this.isRecognizing) {
+                        // 更新头部位置历史
+                        this.updateHeadPositionHistory(results.poseLandmarks);
+                        
+                        this.recognizeAction(results.poseLandmarks);
+                        this.updateTrajectory(results.poseLandmarks);
+                        this.drawTrajectory();
+                    }
+                    
+                    // 更新调试信息
+                    this.updateDebugInfo(results.poseLandmarks);
+                }
+            }
+
+            drawPose(landmarks) {
+                const connections = [
+                    [11, 12], // 左肩-右肩
+                    [11, 13], // 左肩-左肘
+                    [13, 15], // 左肘-左腕
+                    [12, 14], // 右肩-右肘
+                    [14, 16], // 右肘-右腕
+                    [11, 23], // 左肩-左髋
+                    [12, 24], // 右肩-右髋
+                    [23, 24], // 左髋-右髋
+                ];
+
+                // 绘制连接线
+                this.canvasCtx.strokeStyle = '#00FF00';
+                this.canvasCtx.lineWidth = 2;
+
+                connections.forEach(([start, end]) => {
+                    if (landmarks[start] && landmarks[end]) {
+                        this.canvasCtx.beginPath();
+                        this.canvasCtx.moveTo(
+                            landmarks[start].x * this.canvasElement.width,
+                            landmarks[start].y * this.canvasElement.height
+                        );
+                        this.canvasCtx.lineTo(
+                            landmarks[end].x * this.canvasElement.width,
+                            landmarks[end].y * this.canvasElement.height
+                        );
+                        this.canvasCtx.stroke();
+                    }
+                });
+
+                // 绘制关键点
+                const keyPoints = [11, 12, 13, 14, 15, 16, 23, 24]; // 肩膀、肘部、手腕、髋部
+                keyPoints.forEach(index => {
+                    if (landmarks[index]) {
+                        const x = landmarks[index].x * this.canvasElement.width;
+                        const y = landmarks[index].y * this.canvasElement.height;
+                        
+                        this.canvasCtx.beginPath();
+                        this.canvasCtx.arc(x, y, 5, 0, 2 * Math.PI);
+                        this.canvasCtx.fillStyle = index < 13 ? '#3498db' : '#34495e';
+                        this.canvasCtx.fill();
+                        this.canvasCtx.strokeStyle = '#000000';
+                        this.canvasCtx.lineWidth = 1;
+                        this.canvasCtx.stroke();
+                    }
+                });
+            }
+
+            recognizeAction(landmarks) {
+                // 获取关键点
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftElbow = landmarks[13];
+                const rightElbow = landmarks[14];
+                const leftWrist = landmarks[15];
+                const rightWrist = landmarks[16];
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                const leftKnee = landmarks[25];
+                const rightKnee = landmarks[26];
+                const leftAnkle = landmarks[27];
+                const rightAnkle = landmarks[28];
+                const nose = landmarks[0];
+                const leftEar = landmarks[7];
+                const rightEar = landmarks[8];
+
+                if (!leftShoulder || !rightShoulder || !leftWrist || !rightWrist) {
+                    this.updateAction('未检测到完整姿态', '');
+                    return;
+                }
+
+                // 计算肩膀宽度（用于动态阈值）
+                const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+                const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+
+                // 判断手臂是否抬起（手腕Y坐标小于肩膀Y坐标表示抬起）
+                // 注意：MediaPipe的Y坐标是归一化的，0在顶部，1在底部
+                const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
+                const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+
+                // 计算角度的辅助函数
+                const calculateAngle = (point1, point2, point3) => {
+                    const radians = Math.atan2(point3.y - point2.y, point3.x - point2.x) - 
+                                  Math.atan2(point1.y - point2.y, point1.x - point2.x);
+                    let angle = Math.abs(radians * 180 / Math.PI);
+                    if (angle > 180) angle = 360 - angle;
+                    return angle;
+                };
+
+                // 计算距离的辅助函数
+                const calculateDistance = (point1, point2) => {
+                    return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
+                };
+
+                // 检测其他动作
+                let detectedAction = '';
+                let actionClass = '';
+
+                // 0. 摇头动作检测
+                if (this.detectHeadShake()) {
+                    detectedAction = '摇头';
+                    actionClass = 'head-shake';
+                }
+                // 1. 举起双手
+                else if (leftArmRaised && rightArmRaised) {
+                    detectedAction = '举起双手';
+                    actionClass = 'both-hands';
+                }
+                // 2. 举起右手
+                else if (rightArmRaised && !leftArmRaised) {
+                    detectedAction = '举起右手';
+                    actionClass = 'right-hand';
+                }
+                // 3. 举起左手
+                else if (leftArmRaised && !rightArmRaised) {
+                    detectedAction = '举起左手';
+                    actionClass = 'left-hand';
+                }
+                // 4. 双手抱头
+                else if (leftWrist && rightWrist && nose) {
+                    const leftWristToNose = calculateDistance(leftWrist, nose);
+                    const rightWristToNose = calculateDistance(rightWrist, nose);
+                    if (leftWristToNose < 0.2 && rightWristToNose < 0.2) {
+                        detectedAction = '双手抱头';
+                        actionClass = 'hands-on-head';
+                    }
+                }
+                // 5. 双手叉腰
+                else if (leftWrist && rightWrist && leftHip && rightHip) {
+                    // 计算X坐标接近程度（双手腕靠近对应髋部的X坐标）
+                    const leftWristHipXDiff = Math.abs(leftWrist.x - leftHip.x);
+                    const rightWristHipXDiff = Math.abs(rightWrist.x - rightHip.x);
+                    
+                    // 计算Y坐标接近程度（双手腕在髋部附近）
+                    const leftWristHipYDiff = Math.abs(leftWrist.y - leftHip.y);
+                    const rightWristHipYDiff = Math.abs(rightWrist.y - rightHip.y);
+                    
+                    // 使用动态阈值，基于肩膀宽度
+                    const hipProximityThreshold = Math.max(0.1, shoulderWidth * 0.4);
+                    
+                    // 双手叉腰条件：
+                    // 1. 左手腕X坐标接近左髋
+                    // 2. 右手腕X坐标接近右髋
+                    // 3. 双手腕Y坐标在髋部附近
+                    if (leftWristHipXDiff < hipProximityThreshold && 
+                        rightWristHipXDiff < hipProximityThreshold &&
+                        leftWristHipYDiff < hipProximityThreshold &&
+                        rightWristHipYDiff < hipProximityThreshold) {
+                        detectedAction = '双手叉腰';
+                        actionClass = 'hands-on-hips';
+                    }
+                }
+                // 6. 手臂弯曲
+                else if (leftElbow && rightElbow) {
+                    const leftElbowAngle = calculateAngle(leftShoulder, leftElbow, leftWrist);
+                    const rightElbowAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
+                    if (leftElbowAngle < 90 && rightElbowAngle < 90) {
+                        detectedAction = '手臂弯曲';
+                        actionClass = 'arms-bent';
+                    } else if (leftElbowAngle < 90) {
+                        detectedAction = '左手弯曲';
+                        actionClass = 'left-arm-bent';
+                    } else if (rightElbowAngle < 90) {
+                        detectedAction = '右手弯曲';
+                        actionClass = 'right-arm-bent';
+                    }
+                }
+                // 7. 手臂伸展
+                else if (leftElbow && rightElbow) {
+                    const leftElbowAngle = calculateAngle(leftShoulder, leftElbow, leftWrist);
+                    const rightElbowAngle = calculateAngle(rightShoulder, rightElbow, rightWrist);
+                    if (leftElbowAngle > 160 && rightElbowAngle > 160) {
+                        detectedAction = '手臂伸展';
+                        actionClass = 'arms-extended';
+                    }
+                }
+                // 8. 双手合十
+                else if (leftWrist && rightWrist) {
+                    const wristDistance = calculateDistance(leftWrist, rightWrist);
+                    if (wristDistance < 0.05) {
+                        detectedAction = '双手合十';
+                        actionClass = 'hands-together';
+                    }
+                }
+                // 9. 深蹲
+                else if (leftHip && rightHip && leftKnee && rightKnee) {
+                    const leftKneeAngle = calculateAngle(leftHip, leftKnee, leftAnkle);
+                    const rightKneeAngle = calculateAngle(rightHip, rightKnee, rightAnkle);
+                    if (leftKneeAngle < 90 && rightKneeAngle < 90) {
+                        detectedAction = '深蹲';
+                        actionClass = 'squat';
+                    }
+                }
+                // 10. 踢腿
+                else if (leftKnee && rightKnee) {
+                    const leftKneeY = leftKnee.y;
+                    const rightKneeY = rightKnee.y;
+                    if (leftKneeY < 0.4 && rightKneeY > 0.5) {
+                        detectedAction = '踢左腿';
+                        actionClass = 'kick-left';
+                    } else if (rightKneeY < 0.4 && leftKneeY > 0.5) {
+                        detectedAction = '踢右腿';
+                        actionClass = 'kick-right';
+                    }
+                }
+                // 11. 单腿站立
+                else if (leftAnkle && rightAnkle) {
+                    const leftAnkleY = leftAnkle.y;
+                    const rightAnkleY = rightAnkle.y;
+                    if (leftAnkleY < 0.8 && rightAnkleY > 0.9) {
+                        detectedAction = '单腿站立（左腿）';
+                        actionClass = 'stand-left';
+                    } else if (rightAnkleY < 0.8 && leftAnkleY > 0.9) {
+                        detectedAction = '单腿站立（右腿）';
+                        actionClass = 'stand-right';
+                    }
+                }
+                // 12. 弯腰
+                else if (nose && leftHip && rightHip) {
+                    const noseY = nose.y;
+                    const hipY = (leftHip.y + rightHip.y) / 2;
+                    if (noseY > hipY + 0.1) {
+                        detectedAction = '弯腰';
+                        actionClass = 'bend';
+                    }
+                }
+                // 13. 鞠躬
+                else if (nose && leftShoulder && rightShoulder) {
+                    const noseY = nose.y;
+                    const shoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+                    if (noseY > shoulderY + 0.15) {
+                        detectedAction = '鞠躬';
+                        actionClass = 'bow';
+                    }
+                }
+                // 14. 挥手
+                else if (leftWrist || rightWrist) {
+                    // 简化的挥手检测，实际应用中需要检测手腕的快速来回运动
+                    // 这里只是一个基本实现
+                    const wristY = leftWrist ? leftWrist.y : rightWrist.y;
+                    if (wristY > 0.6 && wristY < 0.8) {
+                        detectedAction = '挥手';
+                        actionClass = 'wave';
+                    }
+                }
+                // 15. 跳跃
+                else if (this.detectJump(landmarks)) {
+                    detectedAction = '跳跃';
+                    actionClass = 'jump';
+                }
+                // 16. 站立
+                else if (this.detectStanding(landmarks)) {
+                    detectedAction = '站立';
+                    actionClass = 'stand';
+                }
+                // 17. 坐下
+                else if (this.detectSitting(landmarks)) {
+                    detectedAction = '坐下';
+                    actionClass = 'sit';
+                }
+                // 18. 点头
+                else if (this.detectHeadNod()) {
+                    detectedAction = '点头';
+                    actionClass = 'head-nod';
+                }
+                // 19. 抬头
+                else if (this.detectHeadUp(landmarks)) {
+                    detectedAction = '抬头';
+                    actionClass = 'head-up';
+                }
+                // 20. 低头
+                else if (this.detectHeadDown(landmarks)) {
+                    detectedAction = '低头';
+                    actionClass = 'head-down';
+                }
+                // 21. 走路
+                else if (this.detectWalking(landmarks)) {
+                    detectedAction = '走路';
+                    actionClass = 'walk';
+                }
+                // 22. 跑步
+                else if (this.detectRunning(landmarks)) {
+                    detectedAction = '跑步';
+                    actionClass = 'run';
+                }
+                // 23. 站立不动（默认）
+                else {
+                    detectedAction = '站立不动';
+                    actionClass = '';
+                }
+
+                this.updateAction(detectedAction, actionClass);
+            }
+
+            updateTrajectory(landmarks) {
+                const leftWrist = landmarks[15];
+                const rightWrist = landmarks[16];
+
+                if (leftWrist) {
+                    this.trajectoryData.leftWrist.push({
+                        x: leftWrist.x * this.canvasElement.width,
+                        y: leftWrist.y * this.canvasElement.height
+                    });
+                    if (this.trajectoryData.leftWrist.length > this.maxTrajectoryPoints) {
+                        this.trajectoryData.leftWrist.shift();
+                    }
+                }
+
+                if (rightWrist) {
+                    this.trajectoryData.rightWrist.push({
+                        x: rightWrist.x * this.canvasElement.width,
+                        y: rightWrist.y * this.canvasElement.height
+                    });
+                    if (this.trajectoryData.rightWrist.length > this.maxTrajectoryPoints) {
+                        this.trajectoryData.rightWrist.shift();
+                    }
+                }
+
+                this.updateTrajectoryInfo();
+            }
+
+            drawTrajectory() {
+                this.drawTrajectoryLine(this.trajectoryData.leftWrist, '#3498db');
+                this.drawTrajectoryLine(this.trajectoryData.rightWrist, '#34495e');
+            }
+
+            drawTrajectoryLine(points, color) {
+                if (points.length < 2) return;
+
+                this.canvasCtx.strokeStyle = color;
+                this.canvasCtx.lineWidth = 4;
+                this.canvasCtx.lineCap = 'round';
+                this.canvasCtx.lineJoin = 'round';
+
+                this.canvasCtx.beginPath();
+                this.canvasCtx.moveTo(points[0].x, points[0].y);
+
+                for (let i = 1; i < points.length; i++) {
+                    const alpha = i / points.length;
+                    this.canvasCtx.globalAlpha = alpha;
+                    this.canvasCtx.lineTo(points[i].x, points[i].y);
+                }
+
+                this.canvasCtx.stroke();
+                this.canvasCtx.globalAlpha = 1;
+            }
+
+            toggleRecognition() {
+                this.isRecognizing = !this.isRecognizing;
+                if (this.isRecognizing) {
+                    this.startRecognitionBtn.textContent = '停止识别';
+                    this.updateStatus('开始识别动作');
+                    this.updateAction('识别中...', '');
+                } else {
+                    this.startRecognitionBtn.textContent = '开始识别';
+                    this.updateStatus('已停止识别');
+                    this.updateAction('等待开始识别', '');
+                }
+            }
+
+            updateAction(name, className) {
+                this.actionNameElement.textContent = name;
+                this.actionNameElement.className = 'action-name ' + className;
+            }
+
+            updateStatus(text) {
+                this.statusTextElement.textContent = text;
+            }
+
+            updateTrajectoryInfo() {
+                this.trajectoryInfoElement.innerHTML = 
+                    `左腕轨迹点: ${this.trajectoryData.leftWrist.length}<br>
+                     右腕轨迹点: ${this.trajectoryData.rightWrist.length}`;
+            }
+
+            updateDebugInfo(landmarks) {
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftWrist = landmarks[15];
+                const rightWrist = landmarks[16];
+
+                if (leftShoulder && rightShoulder && leftWrist && rightWrist) {
+                    const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+                    const leftDiff = (leftShoulder.y - leftWrist.y).toFixed(3);
+                    const rightDiff = (rightShoulder.y - rightWrist.y).toFixed(3);
+                    
+                    this.debugInfoElement.innerHTML = `
+                        肩膀宽度: ${shoulderWidth.toFixed(3)}<br>
+                        左手抬起程度: ${leftDiff}<br>
+                        右手抬起程度: ${rightDiff}<br>
+                        阈值: ${Math.max(0.1, shoulderWidth * 0.3).toFixed(3)}
+                    `;
+                }
+            }
+
+            updateHeadPositionHistory(landmarks) {
+                const nose = landmarks[0];
+                if (nose) {
+                    // 添加当前头部位置到历史记录
+                    this.headPositionHistory.push({
+                        x: nose.x,
+                        y: nose.y,
+                        timestamp: Date.now()
+                    });
+                    
+                    // 保持历史记录长度
+                    if (this.headPositionHistory.length > this.maxHeadHistoryPoints) {
+                        this.headPositionHistory.shift();
+                    }
+                }
+            }
+
+            detectHeadShake() {
+                if (this.headPositionHistory.length < 10) {
+                    return false; // 减少历史数据要求
+                }
+
+                // 计算头部在X轴方向的移动范围
+                const xValues = this.headPositionHistory.map(pos => pos.x);
+                const minX = Math.min(...xValues);
+                const maxX = Math.max(...xValues);
+                const xRange = maxX - minX;
+                
+                // 计算头部在Y轴方向的移动范围（用于排除其他动作）
+                const yValues = this.headPositionHistory.map(pos => pos.y);
+                const minY = Math.min(...yValues);
+                const maxY = Math.max(...yValues);
+                const yRange = maxY - minY;
+
+                // 计算头部移动的频率（左右摆动次数）
+                let directionChanges = 0;
+                let lastDirection = null;
+
+                for (let i = 1; i < this.headPositionHistory.length; i++) {
+                    const currentX = this.headPositionHistory[i].x;
+                    const previousX = this.headPositionHistory[i-1].x;
+                    // 只考虑明显的方向变化
+                    if (Math.abs(currentX - previousX) > 0.015) {
+                        const direction = currentX > previousX ? 'right' : 'left';
+
+                        if (lastDirection && direction !== lastDirection) {
+                            directionChanges++;
+                        }
+                        lastDirection = direction;
+                    }
+                }
+
+                // 判断是否为摇头动作
+                // 1. X轴移动范围足够大
+                // 2. Y轴移动范围较小（排除点头等动作）
+                // 3. 方向变化足够多
+                // 4. 动作发生在最近一段时间内
+                const recentHistory = this.headPositionHistory.filter(pos => 
+                    Date.now() - pos.timestamp < 2000 // 恢复时间窗口
+                );
+
+                return xRange > 0.1 && // 恢复X轴移动范围要求
+                       yRange < 0.1 && // 放宽Y轴变化限制
+                       directionChanges >= 2 && // 减少方向变化要求
+                       recentHistory.length >= 8; // 减少最近记录要求
+            }
+
+            detectJump(landmarks) {
+                // 简化的跳跃检测
+                const nose = landmarks[0];
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                
+                if (!nose || !leftHip || !rightHip) {
+                    return false;
+                }
+                
+                // 跳跃时身体会上升，髋部位置会升高
+                const hipY = (leftHip.y + rightHip.y) / 2;
+                return hipY < 0.4; // 髋部位置明显升高
+            }
+
+            detectStanding(landmarks) {
+                const leftShoulder = landmarks[11];
+                const rightShoulder = landmarks[12];
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                
+                if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) {
+                    return false;
+                }
+                
+                // 站立时，肩膀和髋部在同一垂直线上
+                const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2;
+                const hipCenterX = (leftHip.x + rightHip.x) / 2;
+                const horizontalOffset = Math.abs(shoulderCenterX - hipCenterX);
+                
+                return horizontalOffset < 0.1; // 水平偏移小
+            }
+
+            detectSitting(landmarks) {
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
+                const leftKnee = landmarks[25];
+                const rightKnee = landmarks[26];
+                
+                if (!leftHip || !rightHip || !leftKnee || !rightKnee) {
+                    return false;
+                }
+                
+                // 坐下时，髋部位置较低，膝盖角度小于90度
+                const hipY = (leftHip.y + rightHip.y) / 2;
+                const leftKneeAngle = this.calculateAngle(leftHip, leftKnee, landmarks[27]);
+                const rightKneeAngle = this.calculateAngle(rightHip, rightKnee, landmarks[28]);
+                
+                return hipY > 0.6 && leftKneeAngle < 90 && rightKneeAngle < 90;
+            }
+
+            detectHeadNod() {
+                if (this.headPositionHistory.length < 8) {
+                    return false; // 减少历史数据要求
+                }
+                
+                // 计算头部在Y轴方向的移动范围
+                const yValues = this.headPositionHistory.map(pos => pos.y);
+                const minY = Math.min(...yValues);
+                const maxY = Math.max(...yValues);
+                const yRange = maxY - minY;
+                
+                // 计算头部在X轴方向的移动范围（用于排除摇头）
+                const xValues = this.headPositionHistory.map(pos => pos.x);
+                const minX = Math.min(...xValues);
+                const maxX = Math.max(...xValues);
+                const xRange = maxX - minX;
+                
+                // 计算头部移动的频率（上下摆动次数）
+                let directionChanges = 0;
+                let lastDirection = null;
+                
+                for (let i = 1; i < this.headPositionHistory.length; i++) {
+                    const currentY = this.headPositionHistory[i].y;
+                    const previousY = this.headPositionHistory[i-1].y;
+                    // 只考虑明显的方向变化
+                    if (Math.abs(currentY - previousY) > 0.01) {
+                        const direction = currentY > previousY ? 'down' : 'up';
+                        
+                        if (lastDirection && direction !== lastDirection) {
+                            directionChanges++;
+                        }
+                        lastDirection = direction;
+                    }
+                }
+                
+                // 优化条件：Y轴变化大于X轴变化，且有足够的方向变化
+                return yRange > 0.03 && // 降低Y轴阈值
+                       xRange < 0.08 && // 限制X轴变化
+                       directionChanges >= 1; // 减少方向变化要求
+            }
+
+            detectHeadUp(landmarks) {
+                const nose = landmarks[0];
+                const leftEar = landmarks[7];
+                const rightEar = landmarks[8];
+                
+                if (!nose || !leftEar || !rightEar) {
+                    return false;
+                }
+                
+                // 抬头时，鼻子位置低于耳朵
+                const earY = (leftEar.y + rightEar.y) / 2;
+                return nose.y < earY - 0.05;
+            }
+
+            detectHeadDown(landmarks) {
+                const nose = landmarks[0];
+                const leftEar = landmarks[7];
+                const rightEar = landmarks[8];
+                
+                if (!nose || !leftEar || !rightEar) {
+                    return false;
+                }
+                
+                // 低头时，鼻子位置高于耳朵
+                const earY = (leftEar.y + rightEar.y) / 2;
+                return nose.y > earY + 0.05;
+            }
+
+            detectWalking(landmarks) {
+                const leftAnkle = landmarks[27];
+                const rightAnkle = landmarks[28];
+                
+                if (!leftAnkle || !rightAnkle) {
+                    return false;
+                }
+                
+                // 简化的走路检测：脚踝位置交替变化
+                // 实际应用中需要分析时间序列数据
+                const ankleYDiff = Math.abs(leftAnkle.y - rightAnkle.y);
+                return ankleYDiff > 0.1 && ankleYDiff < 0.3;
+            }
+
+            detectRunning(landmarks) {
+                const leftAnkle = landmarks[27];
+                const rightAnkle = landmarks[28];
+                const leftWrist = landmarks[15];
+                const rightWrist = landmarks[16];
+                
+                if (!leftAnkle || !rightAnkle || !leftWrist || !rightWrist) {
+                    return false;
+                }
+                
+                // 跑步时，脚踝位置差异更大，手臂摆动幅度更大
+                const ankleYDiff = Math.abs(leftAnkle.y - rightAnkle.y);
+                const wristXDiff = Math.abs(leftWrist.x - rightWrist.x);
+                
+                return ankleYDiff > 0.2 && wristXDiff > 0.3;
+            }
+
+            // 辅助方法：计算角度
+            calculateAngle(point1, point2, point3) {
+                const radians = Math.atan2(point3.y - point2.y, point3.x - point2.x) - 
+                              Math.atan2(point1.y - point2.y, point1.x - point2.x);
+                let angle = Math.abs(radians * 180 / Math.PI);
+                if (angle > 180) angle = 360 - angle;
+                return angle;
+            }
+
+            reset() {
+                // 重置轨迹数据
+                this.trajectoryData = {
+                    leftWrist: [],
+                    rightWrist: []
+                };
+                
+                // 重置头部位置历史
+                this.headPositionHistory = [];
+                
+                this.isRecognizing = false;
+                this.startRecognitionBtn.textContent = '开始识别';
+                
+                this.updateTrajectoryInfo();
+                this.updateAction('等待识别...', '');
+                this.updateStatus('已重置，点击"开始识别"重新开始');
+                this.debugInfoElement.textContent = '等待启动...';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            new ActionCapture();
+        });
+    </script>
+</body>
+</html>

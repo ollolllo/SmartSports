@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动作捕捉</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .action-capture-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .camera-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .camera-wrapper {
+            position: relative;
+            background-color: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        #cameraFeed {
+            display: block;
+            transform: scaleX(-1);
+        }
+
+        #trackerCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: scaleX(-1);
+            pointer-events: none;
+        }
+
+        .action-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 50px;
+            border-radius: 15px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            min-width: 300px;
+        }
+
+        .action-label {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+
+        .action-name {
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .action-name.right-hand {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .action-name.left-hand {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .action-name.both-hands {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            font-size: 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-text {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .instructions h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .instructions ul {
+            margin-bottom: 0;
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 5px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="action-capture-container">
+        <h1>动作捕捉</h1>
+
+        <div class="instructions">
+            <h3>操作说明</h3>
+            <ul>
+                <li>点击"启动摄像头"按钮开始捕捉动作</li>
+                <li>举起右手 → 显示"举起右手"</li>
+                <li>举起左手 → 显示"举起左手"</li>
+                <li>举起双手 → 显示"举起双手"</li>
+            </ul>
+        </div>
+
+        <div class="camera-section">
+            <div class="camera-wrapper">
+                <video id="cameraFeed" width="640" height="480" autoplay playsinline></video>
+                <canvas id="trackerCanvas" width="640" height="480"></canvas>
+            </div>
+
+            <div class="action-display">
+                <div class="action-label">当前动作</div>
+                <div class="action-name" id="actionName">等待识别...</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="startCameraBtn">启动摄像头</button>
+            <button class="btn btn-secondary" id="resetBtn" disabled>重置</button>
+        </div>
+
+        <div class="status-text" id="statusText">请点击"启动摄像头"按钮开始</div>
+    </div>
+
+    <script type="module">
+        import * as tf from '@tensorflow/tfjs';
+        import * as poseDetection from '@tensorflow-models/pose-detection';
+
+        class ActionCapture {
+            constructor() {
+                this.cameraFeed = document.getElementById('cameraFeed');
+                this.trackerCanvas = document.getElementById('trackerCanvas');
+                this.trackerCtx = this.trackerCanvas.getContext('2d');
+                this.actionNameElement = document.getElementById('actionName');
+                this.statusTextElement = document.getElementById('statusText');
+                this.startCameraBtn = document.getElementById('startCameraBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+
+                this.detector = null;
+                this.isModelLoaded = false;
+                this.cameraStarted = false;
+                this.trackingInterval = null;
+
+                this.trajectoryData = {
+                    leftWrist: [],
+                    rightWrist: []
+                };
+                this.maxTrajectoryPoints = 30;
+
+                this.init();
+            }
+
+            init() {
+                this.startCameraBtn.addEventListener('click', () => this.setupCamera());
+                this.resetBtn.addEventListener('click', () => this.reset());
+                this.loadModels();
+            }
+
+            async loadModels() {
+                try {
+                    this.updateStatus('正在加载模型...');
+
+                    if (!tf || !poseDetection) {
+                        this.updateStatus('模型库加载失败，请检查网络连接');
+                        return;
+                    }
+
+                    await tf.setBackend('cpu');
+                    await tf.ready();
+
+                    const detectorConfig = {
+                        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+                        enableSmoothing: true,
+                        inputResolution: { width: 640, height: 480 }
+                    };
+
+                    this.detector = await poseDetection.createDetector(
+                        poseDetection.SupportedModels.MoveNet,
+                        detectorConfig
+                    );
+
+                    this.isModelLoaded = true;
+                    this.updateStatus('模型加载完成，请启动摄像头');
+                } catch (error) {
+                    console.error('模型加载失败:', error);
+                    this.updateStatus('模型加载失败: ' + error.message);
+                }
+            }
+
+            async setupCamera() {
+                if (this.cameraStarted) return;
+
+                if (!this.isModelLoaded) {
+                    this.updateStatus('模型未加载，请稍后重试');
+                    return;
+                }
+
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            facingMode: 'user',
+                            width: { ideal: 640 },
+                            height: { ideal: 480 }
+                        },
+                        audio: false
+                    });
+
+                    this.cameraFeed.srcObject = stream;
+                    this.cameraStarted = true;
+
+                    this.cameraFeed.onloadedmetadata = () => {
+                        this.updateStatus('摄像头已启动，开始捕捉动作');
+                        this.startCameraBtn.disabled = true;
+                        this.resetBtn.disabled = false;
+                        this.startTracking();
+                    };
+                } catch (error) {
+                    console.error('摄像头访问失败:', error);
+                    let errorMessage = '摄像头访问失败';
+                    if (error.name === 'NotAllowedError') {
+                        errorMessage = '摄像头权限被拒绝';
+                    } else if (error.name === 'NotFoundError') {
+                        errorMessage = '未找到摄像头设备';
+                    }
+                    this.updateStatus(errorMessage);
+                }
+            }
+
+            startTracking() {
+                this.trackingInterval = setInterval(() => this.trackAction(), 33);
+            }
+
+            async trackAction() {
+                console.log('trackAction called, isModelLoaded:', this.isModelLoaded, 'cameraStarted:', this.cameraStarted, 'cameraFeed.paused:', this.cameraFeed.paused);
+                if (!this.isModelLoaded || !this.cameraStarted) return;
+
+                try {
+                    if (this.cameraFeed.paused) return;
+
+                    this.trackerCtx.clearRect(0, 0, this.trackerCanvas.width, this.trackerCanvas.height);
+
+                    const poses = await this.detector.estimatePoses(this.cameraFeed);
+                    console.log('Poses detected:', poses.length);
+
+                    if (poses.length > 0) {
+                        const pose = poses[0];
+                        console.log('Pose score:', pose.score, 'Keypoints:', pose.keypoints ? pose.keypoints.length : 0);
+                        if (pose.score > 0.3) {
+                            this.processPose(pose);
+                            this.drawPose(pose);
+                            this.drawTrajectory();
+                        }
+                    }
+                } catch (error) {
+                    console.error('追踪出错:', error);
+                }
+            }
+
+            processPose(pose) {
+                if (!pose.keypoints) return;
+
+                const leftWrist = pose.keypoints.find(kp => kp.name === 'left_wrist');
+                const rightWrist = pose.keypoints.find(kp => kp.name === 'right_wrist');
+                const leftShoulder = pose.keypoints.find(kp => kp.name === 'left_shoulder');
+                const rightShoulder = pose.keypoints.find(kp => kp.name === 'right_shoulder');
+
+                this.updateTrajectory(leftWrist, rightWrist);
+                this.recognizeAction(leftWrist, rightWrist, leftShoulder, rightShoulder);
+            }
+
+            updateTrajectory(leftWrist, rightWrist) {
+                const confidenceThreshold = 0.3;
+
+                if (leftWrist && leftWrist.score > confidenceThreshold) {
+                    this.trajectoryData.leftWrist.push({ x: leftWrist.x, y: leftWrist.y });
+                    if (this.trajectoryData.leftWrist.length > this.maxTrajectoryPoints) {
+                        this.trajectoryData.leftWrist.shift();
+                    }
+                }
+
+                if (rightWrist && rightWrist.score > confidenceThreshold) {
+                    this.trajectoryData.rightWrist.push({ x: rightWrist.x, y: rightWrist.y });
+                    if (this.trajectoryData.rightWrist.length > this.maxTrajectoryPoints) {
+                        this.trajectoryData.rightWrist.shift();
+                    }
+                }
+            }
+
+            recognizeAction(leftWrist, rightWrist, leftShoulder, rightShoulder) {
+                const confidenceThreshold = 0.3;
+
+                if (!leftWrist || !rightWrist || !leftShoulder || !rightShoulder) {
+                    this.updateAction('无法识别', '');
+                    return;
+                }
+
+                if (leftWrist.score < confidenceThreshold || rightWrist.score < confidenceThreshold ||
+                    leftShoulder.score < confidenceThreshold || rightShoulder.score < confidenceThreshold) {
+                    this.updateAction('识别中...', '');
+                    return;
+                }
+
+                const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+                const armRaisedThreshold = Math.max(25, shoulderWidth * 0.3);
+
+                const leftArmRaised = leftWrist.y < leftShoulder.y - armRaisedThreshold;
+                const rightArmRaised = rightWrist.y < rightShoulder.y - armRaisedThreshold;
+
+                if (leftArmRaised && rightArmRaised) {
+                    this.updateAction('举起双手', 'both-hands');
+                } else if (rightArmRaised && !leftArmRaised) {
+                    this.updateAction('举起右手', 'right-hand');
+                } else if (leftArmRaised && !rightArmRaised) {
+                    this.updateAction('举起左手', 'left-hand');
+                } else {
+                    this.updateAction('站立不动', '');
+                }
+            }
+
+            updateAction(name, className) {
+                this.actionNameElement.textContent = name;
+                this.actionNameElement.className = 'action-name ' + className;
+            }
+
+            drawPose(pose) {
+                if (!pose.keypoints) return;
+
+                const connections = [
+                    ['nose', 'left_eye'], ['left_eye', 'left_ear'],
+                    ['nose', 'right_eye'], ['right_eye', 'right_ear'],
+                    ['nose', 'left_shoulder'], ['nose', 'right_shoulder'],
+                    ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
+                    ['right_shoulder', 'right_elbow'], ['right_elbow', 'right_wrist'],
+                    ['left_shoulder', 'left_hip'], ['right_shoulder', 'right_hip'],
+                    ['left_hip', 'left_knee'], ['left_knee', 'left_ankle'],
+                    ['right_hip', 'right_knee'], ['right_knee', 'right_ankle']
+                ];
+
+                this.trackerCtx.strokeStyle = '#00FF00';
+                this.trackerCtx.lineWidth = 3;
+
+                connections.forEach(([start, end]) => {
+                    const startKeypoint = pose.keypoints.find(kp => kp.name === start);
+                    const endKeypoint = pose.keypoints.find(kp => kp.name === end);
+
+                    if (startKeypoint && endKeypoint && startKeypoint.score > 0.3 && endKeypoint.score > 0.3) {
+                        this.trackerCtx.beginPath();
+                        this.trackerCtx.moveTo(startKeypoint.x, startKeypoint.y);
+                        this.trackerCtx.lineTo(endKeypoint.x, endKeypoint.y);
+                        this.trackerCtx.stroke();
+                    }
+                });
+
+                pose.keypoints.forEach(keypoint => {
+                    if (keypoint.score > 0.3) {
+                        const size = 6;
+                        const color = ['left_wrist', 'right_wrist'].includes(keypoint.name) ? '#FF0000' : '#00FF00';
+
+                        this.trackerCtx.beginPath();
+                        this.trackerCtx.arc(keypoint.x, keypoint.y, size, 0, 2 * Math.PI);
+                        this.trackerCtx.fillStyle = color;
+                        this.trackerCtx.fill();
+                    }
+                });
+            }
+
+            drawTrajectory() {
+                this.drawTrajectoryLine(this.trajectoryData.leftWrist, '#FF6B6B');
+                this.drawTrajectoryLine(this.trajectoryData.rightWrist, '#4ECDC4');
+            }
+
+            drawTrajectoryLine(points, color) {
+                if (points.length < 2) return;
+
+                this.trackerCtx.strokeStyle = color;
+                this.trackerCtx.lineWidth = 4;
+                this.trackerCtx.lineCap = 'round';
+                this.trackerCtx.lineJoin = 'round';
+
+                this.trackerCtx.beginPath();
+                this.trackerCtx.moveTo(points[0].x, points[0].y);
+
+                for (let i = 1; i < points.length; i++) {
+                    const alpha = i / points.length;
+                    this.trackerCtx.strokeStyle = color;
+                    this.trackerCtx.globalAlpha = alpha;
+                    this.trackerCtx.lineTo(points[i].x, points[i].y);
+                }
+
+                this.trackerCtx.stroke();
+                this.trackerCtx.globalAlpha = 1;
+
+                if (points.length > 0) {
+                    const endPoint = points[points.length - 1];
+                    this.trackerCtx.beginPath();
+                    this.trackerCtx.arc(endPoint.x, endPoint.y, 8, 0, 2 * Math.PI);
+                    this.trackerCtx.fillStyle = color;
+                    this.trackerCtx.fill();
+                    this.trackerCtx.strokeStyle = '#fff';
+                    this.trackerCtx.lineWidth = 2;
+                    this.trackerCtx.stroke();
+                }
+            }
+
+            updateStatus(text) {
+                this.statusTextElement.textContent = text;
+            }
+
+            reset() {
+                this.trajectoryData = {
+                    leftWrist: [],
+                    rightWrist: []
+                };
+                this.trackerCtx.clearRect(0, 0, this.trackerCanvas.width, this.trackerCanvas.height);
+                this.updateAction('等待识别...', '');
+                this.updateStatus('已重置，请继续捕捉动作');
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            new ActionCapture();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>表情图片测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f8ff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .image-item {
+            text-align: center;
+            padding: 15px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-item img {
+            width: 150px;
+            height: 150px;
+            object-fit: contain;
+            margin-bottom: 10px;
+        }
+        .image-item p {
+            font-weight: bold;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>表情图片测试</h1>
+        <div class="image-grid">
+            <div class="image-item">
+                <img src="./imgs/1.png" alt="默认表情">
+                <p>默认表情</p>
+            </div>
+            <div class="image-item">
+                <img src="./imgs/4.png" alt="开心表情">
+                <p>开心表情</p>
+            </div>
+            <div class="image-item">
+                <img src="./imgs/5.png" alt="得意表情">
+                <p>得意表情</p>
+            </div>
+            <div class="image-item">
+                <img src="./imgs/3.png" alt="哭的表情">
+                <p>哭的表情</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
