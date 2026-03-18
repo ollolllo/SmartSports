@@ -476,6 +476,7 @@
         let isObjectsPaused = false; // 标记物体是否暂停下落
         let isJumpDisabled = false; // 标记是否禁用跳跃响应
         let slidingImagePauseTimer = null; // 滑动图片暂停的定时器
+        let isInProximity = false; // 标记滑动图片是否在接近范围内
         
         // 游戏参数
         const gameArea = document.querySelector('.game-area');
@@ -976,15 +977,35 @@
         
         // 更新物体位置
         function updateObjects() {
+            if (!character) return;
+            
+            const characterRect = character.getBoundingClientRect();
+            const gameAreaRect = gameArea.getBoundingClientRect();
+            const characterTop = characterRect.top - gameAreaRect.top;
+            
+            // 计算130像素的相对单位
+            const relativeUnit = gameArea.offsetHeight * 0.01;
+            const proximityTop = characterTop - 130; // 130像素
+            
             objects.forEach((obj, index) => {
-                // 无论滑动图片是否靠近，物体都继续下落
-                // 根据滑动图片状态调整速度
+                // 根据滑动图片状态和物体位置调整速度
                 if (isSlidingImageVisible) {
                     // 滑动图片在屏幕上时，速度再减慢一倍
                     obj.speed = obj.originalSpeed / 2;
                 } else {
                     // 滑动图片离开屏幕后，恢复原始速度
                     obj.speed = obj.originalSpeed;
+                }
+                
+                // 当滑动图片在接近范围内时，控制物体下落
+                if (isInProximity) {
+                    // 超过130像素上方的物体停止落下
+                    if (obj.y < proximityTop) {
+                        obj.speed = 0;
+                    } else {
+                        // 130像素内的物体继续落下
+                        obj.speed = obj.originalSpeed / 2;
+                    }
                 }
                 
                 obj.y += obj.speed;
@@ -1276,10 +1297,8 @@
                 const gameAreaRect = gameArea.getBoundingClientRect();
                 const characterTop = characterRect.top - gameAreaRect.top;
                 
-                // 计算相对单位（基于游戏区域高度的1%）
-                const relativeUnit = gameArea.offsetHeight * 0.01;
-                // 使用相对单位定义接近范围
-                const proximityTop = characterTop - relativeUnit * 13;
+                // 检查正上方不超过130像素距离的区域是否有物体
+                const proximityTop = characterTop - 130; // 130像素
                 
                 return objects.some(obj => {
                     return obj.y >= proximityTop && obj.y <= characterTop;
@@ -1294,8 +1313,11 @@
                 const gameAreaRect = gameArea.getBoundingClientRect();
                 const characterTop = characterRect.top - gameAreaRect.top;
                 
+                // 检查正上方130像素内的物体是否全部落下
+                const proximityTop = characterTop - 130; // 130像素
+                
                 return !objects.some(obj => {
-                    return obj.y <= characterTop;
+                    return obj.y >= proximityTop && obj.y <= characterTop;
                 });
             }
             
@@ -1303,14 +1325,8 @@
             function handleProximity() {
                 const distance = calculateDistance();
                 
-                // 计算相对单位（基于游戏区域高度的1%）
-                const relativeUnit = gameArea.offsetHeight * 0.01;
-                // 使用相对单位定义接近范围
-                const minProximityDistance = relativeUnit * 20;
-                const maxProximityDistance = relativeUnit * 22;
-                
-                // 检查是否进入接近范围
-                if (distance >= minProximityDistance && distance <= maxProximityDistance && !isInProximity) {
+                // 检查是否进入接近范围（水平距离少于220像素）
+                if (distance < 220 && !isInProximity) {
                     isInProximity = true;
                     
                     // 检查表情区域正上方范围内是否有物体
@@ -1329,8 +1345,9 @@
                                 // 恢复正常状态
                                 isSlidingPaused = false;
                                 isJumpDisabled = false;
+                                isInProximity = false;
                                 // 恢复滑动，让图片从当前位置继续滑动到屏幕右侧外
-                                const targetPosition = gameArea.offsetWidth + relativeUnit * 20;
+                                const targetPosition = gameArea.offsetWidth + (gameArea.offsetWidth * 0.1);
                                 // 计算剩余滑动距离
                                 const currentLeft = parseFloat(slidingImage.style.left) || 0;
                                 const remainingDistance = targetPosition - currentLeft;
@@ -1346,7 +1363,8 @@
                         // 情况B：没有物体在范围内
                         // 继续正常滑动
                     }
-                } else if (distance > 220) {
+                } else if (distance > 100) {
+                    // 滑动图片离开角色区域的水平距离超过100像素，恢复物体正常落下
                     isInProximity = false;
                 }
             }
