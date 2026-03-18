@@ -977,20 +977,18 @@
         // 更新物体位置
         function updateObjects() {
             objects.forEach((obj, index) => {
-                // 检查是否暂停下落
-                if (!isObjectsPaused) {
-                    // 根据滑动图片状态调整速度
-                    if (isSlidingImageVisible) {
-                        // 滑动图片在屏幕上时，速度再减慢一倍
-                        obj.speed = obj.originalSpeed / 2;
-                    } else {
-                        // 滑动图片离开屏幕后，恢复原始速度
-                        obj.speed = obj.originalSpeed;
-                    }
-                    
-                    obj.y += obj.speed;
-                    obj.element.style.top = `${obj.y}px`;
+                // 无论滑动图片是否靠近，物体都继续下落
+                // 根据滑动图片状态调整速度
+                if (isSlidingImageVisible) {
+                    // 滑动图片在屏幕上时，速度再减慢一倍
+                    obj.speed = obj.originalSpeed / 2;
+                } else {
+                    // 滑动图片离开屏幕后，恢复原始速度
+                    obj.speed = obj.originalSpeed;
                 }
+                
+                obj.y += obj.speed;
+                obj.element.style.top = `${obj.y}px`;
                 
                 // 移除超出屏幕的物体
                 if (obj.y > gameArea.offsetHeight) {
@@ -1315,15 +1313,12 @@
                 if (distance >= minProximityDistance && distance <= maxProximityDistance && !isInProximity) {
                     isInProximity = true;
                     
-                    // 暂停所有物体下落
-                    isObjectsPaused = true;
-                    
                     // 检查表情区域正上方范围内是否有物体
                     if (hasObjectsInProximity()) {
                         // 情况A：有物体在范围内
-                        // 暂停滑动
+                        // 暂停滑动，但保持图片可见
                         isSlidingPaused = true;
-                        slidingImage.style.transition = 'none';
+                        // 不要禁用过渡效果，保持图片在当前位置
                         // 禁用跳跃响应
                         isJumpDisabled = true;
                         
@@ -1332,30 +1327,24 @@
                             if (allObjectsFallen()) {
                                 clearInterval(checkObjectsInterval);
                                 // 恢复正常状态
-                                isObjectsPaused = false;
                                 isSlidingPaused = false;
                                 isJumpDisabled = false;
                                 // 恢复滑动，让图片从当前位置继续滑动到屏幕右侧外
                                 const targetPosition = gameArea.offsetWidth + relativeUnit * 20;
-                                // 计算剩余滑动距离，设置合适的过渡时间
+                                // 计算剩余滑动距离
                                 const currentLeft = parseFloat(slidingImage.style.left) || 0;
                                 const remainingDistance = targetPosition - currentLeft;
-                                const transitionTime = Math.max(1, Math.min(3, remainingDistance / (gameArea.offsetWidth / 18)));
-                                slidingImage.style.transition = `left ${transitionTime}s ease-in-out`;
+                                // 使用与初始滑动相同的速度范围（80-120像素/秒）
+                                const speed = Math.random() * 40 + 80; // 80-120像素/秒
+                                // 根据剩余距离和速度计算过渡时间
+                                const transitionTime = remainingDistance / speed;
+                                slidingImage.style.transition = `left ${transitionTime}s linear`;
                                 slidingImage.style.left = targetPosition + 'px';
                             }
                         }, 100);
                     } else {
                         // 情况B：没有物体在范围内
-                        // 等待滑动图片离开足够距离
-                        const checkDistanceInterval = setInterval(() => {
-                            const currentDistance = calculateDistance();
-                            if (currentDistance > relativeUnit * 32) { // 22 + 10
-                                clearInterval(checkDistanceInterval);
-                                // 恢复物体下落
-                                isObjectsPaused = false;
-                            }
-                        }, 100);
+                        // 继续正常滑动
                     }
                 } else if (distance > 220) {
                     isInProximity = false;
@@ -1415,9 +1404,16 @@
                 
                 // 计算滑动到右侧屏幕外的位置
                 const targetPosition = gameArea.offsetWidth + (gameArea.offsetWidth * 0.1);
+                // 计算滑动距离（像素）
+                const slideDistance = targetPosition + gameArea.offsetWidth * 0.1; // 加上左侧屏幕外的距离
+                
+                // 生成80-120像素/秒之间的随机速度
+                const speed = Math.random() * 40 + 80; // 80-120像素/秒
+                // 根据距离和速度计算过渡时间
+                const transitionTime = slideDistance / speed;
                 
                 // 开始滑动
-                slidingImage.style.transition = 'left 18s ease-in-out';
+                slidingImage.style.transition = `left ${transitionTime}s linear`;
                 slidingImage.style.left = targetPosition + 'px';
                 
                 // 定期检查碰撞、滑动图片可见性和距离
