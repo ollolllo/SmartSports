@@ -997,8 +997,11 @@
                     obj.speed = obj.originalSpeed;
                 }
                 
-                // 当滑动图片在接近范围内时，控制物体下落
-                if (isInProximity) {
+                // 当物体暂停标志为true时，所有物体都停止落下
+                if (isObjectsPaused) {
+                    obj.speed = 0;
+                } else if (isInProximity) {
+                    // 当滑动图片在接近范围内时，控制物体下落
                     // 超过130像素上方的物体停止落下
                     if (obj.y < proximityTop) {
                         obj.speed = 0;
@@ -1361,11 +1364,14 @@
                         }, 100);
                     } else {
                         // 情况B：没有物体在范围内
+                        // 正上方的石头和金元宝都暂停落下
+                        isObjectsPaused = true;
                         // 继续正常滑动
                     }
                 } else if (distance > 100) {
                     // 滑动图片离开角色区域的水平距离超过100像素，恢复物体正常落下
                     isInProximity = false;
+                    isObjectsPaused = false;
                 }
             }
             
