@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Mesh 人脸关键点提取</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin: 10px 0;
+            font-size: 20px;
+        }
+        .video-container {
+            display: flex;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .video-container > div {
+            position: relative;
+            max-width: 100%;
+            max-height: 40vh;
+        }
+        #video {
+            border: 2px solid #333;
+            border-radius: 8px;
+            width: 400px;
+            height: 300px;
+            transform: scaleX(-1);
+        }
+        #canvas {
+            border: 2px solid #333;
+            border-radius: 8px;
+            width: 400px;
+            height: 300px;
+        }
+        .controls {
+            text-align: center;
+            margin: 10px 0;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .features {
+            background-color: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        h2 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #333;
+        }
+        .feature-item {
+            margin: 5px 0;
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        .feature-item:last-child {
+            border-bottom: none;
+        }
+        .feature-label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .feature-value {
+            color: #666;
+        }
+        @media (max-width: 768px) {
+            body {
+                padding: 5px;
+            }
+            .container {
+                padding: 5px;
+            }
+            h1 {
+                font-size: 18px;
+            }
+            h2 {
+                font-size: 14px;
+            }
+            .feature-item {
+                font-size: 12px;
+                padding: 6px;
+            }
+            button {
+                padding: 6px 12px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MediaPipe Face Mesh 人脸关键点提取</h1>
+        
+        <div class="video-container">
+            <div style="display: flex; gap: 10px;">
+                <div style="display: block;">
+                    <video id="video" width="400" height="300" autoplay></video>
+                </div>
+                <div style="display: block;">
+                    <canvas id="canvas" width="400" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="start-btn">开始检测</button>
+            <button id="stop-btn">停止检测</button>
+        </div>
+        
+        <div class="features">
+            <h2>面部特征</h2>
+            <div id="features-list">
+                <div class="feature-item">
+                    <span class="feature-label">检测状态:</span>
+                    <span class="feature-value" id="detection-status">未开始</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-label">人脸数量:</span>
+                    <span class="feature-value" id="face-count">0</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-label">关键点数量:</span>
+                    <span class="feature-value" id="keypoint-count">0</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-label">眼睛状态:</span>
+                    <span class="feature-value" id="eye-status">未检测</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-label">嘴巴状态:</span>
+                    <span class="feature-value" id="mouth-status">未检测</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-label">检测置信度:</span>
+                    <span class="feature-value" id="confidence">0</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-label">人脸位置:</span>
+                    <span class="feature-value" id="face-position">未检测</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-label">人脸大小:</span>
+                    <span class="feature-value" id="face-size">未检测</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="features">
+            <h2>面部特征数据 (用于后端生成向量)</h2>
+            <div id="feature-data" style="background-color: #f9f9f9; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap;">
+                点击开始检测以获取面部特征数据
+            </div>
+        </div>
+    </div>
+    
+    <!-- 引入 TensorFlow.js 和 Face Mesh 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.0.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/facemesh@0.0.5/dist/facemesh.min.js"></script>
+    
+    <script>
+        // 获取 DOM 元素
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const detectionStatus = document.getElementById('detection-status');
+        const faceCount = document.getElementById('face-count');
+        const keypointCount = document.getElementById('keypoint-count');
+        const eyeStatus = document.getElementById('eye-status');
+        const mouthStatus = document.getElementById('mouth-status');
+        const confidence = document.getElementById('confidence');
+        const facePosition = document.getElementById('face-position');
+        const faceSize = document.getElementById('face-size');
+        
+        // 初始化变量
+        let faceMesh = null;
+        let videoStream = null;
+        let animationFrameId = null;
+        
+        // 绘制关键点
+        function drawLandmarks(landmarks) {
+            ctx.beginPath();
+            landmarks.forEach((landmark, index) => {
+                const x = (1 - landmark[0]) * canvas.width;
+                const y = landmark[1] * canvas.height;
+                
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.strokeStyle = '#00FF00';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // 绘制单个关键点
+            landmarks.forEach((landmark) => {
+                const x = (1 - landmark[0]) * canvas.width;
+                const y = landmark[1] * canvas.height;
+                ctx.beginPath();
+                ctx.arc(x, y, 1, 0, 2 * Math.PI);
+                ctx.fillStyle = '#00FF00';
+                ctx.fill();
+            });
+        }
+        
+        // 分析面部特征
+        function analyzeFacialFeatures(landmarks) {
+            // 眼睛状态分析（使用更准确的方法）
+            // 左眼关键点
+            const leftEye = [
+                landmarks[33],  // 左眼左角
+                landmarks[133], // 左眼右角
+                landmarks[157], // 左眼上睑
+                landmarks[158], // 左眼上睑
+                landmarks[159], // 左眼上睑
+                landmarks[160], // 左眼上睑
+                landmarks[161], // 左眼上睑
+                landmarks[144], // 左眼上睑
+                landmarks[145], // 左眼上睑
+                landmarks[146], // 左眼上睑
+                landmarks[147], // 左眼上睑
+                landmarks[148], // 左眼上睑
+                landmarks[149], // 左眼上睑
+                landmarks[150], // 左眼上睑
+                landmarks[151], // 左眼上睑
+                landmarks[152], // 左眼上睑
+                landmarks[153], // 左眼上睑
+                landmarks[154], // 左眼上睑
+                landmarks[155], // 左眼上睑
+                landmarks[156]  // 左眼上睑
+            ];
+            
+            // 右眼关键点
+            const rightEye = [
+                landmarks[362], // 右眼左角
+                landmarks[263], // 右眼右角
+                landmarks[384], // 右眼上睑
+                landmarks[385], // 右眼上睑
+                landmarks[386], // 右眼上睑
+                landmarks[387], // 右眼上睑
+                landmarks[388], // 右眼上睑
+                landmarks[373], // 右眼上睑
+                landmarks[374], // 右眼上睑
+                landmarks[375], // 右眼上睑
+                landmarks[376], // 右眼上睑
+                landmarks[377], // 右眼上睑
+                landmarks[378], // 右眼上睑
+                landmarks[379], // 右眼上睑
+                landmarks[380], // 右眼上睑
+                landmarks[381], // 右眼上睑
+                landmarks[382], // 右眼上睑
+                landmarks[383]  // 右眼上睑
+            ];
+            
+            // 确保所有关键点存在
+            const leftEyeValid = leftEye.every(point => point);
+            const rightEyeValid = rightEye.every(point => point);
+            
+            if (leftEyeValid && rightEyeValid) {
+                // 计算左眼开合度
+                const leftEyeTop = Math.min(...leftEye.slice(2, 10).map(point => point[1]));
+                const leftEyeBottom = Math.max(...leftEye.slice(10).map(point => point[1]));
+                const leftEyeHeight = leftEyeBottom - leftEyeTop;
+                const leftEyeWidth = leftEye[1][0] - leftEye[0][0];
+                const leftEyeOpenness = leftEyeWidth > 0 ? leftEyeHeight / leftEyeWidth : 0;
+                
+                // 计算右眼开合度
+                const rightEyeTop = Math.min(...rightEye.slice(2, 10).map(point => point[1]));
+                const rightEyeBottom = Math.max(...rightEye.slice(10).map(point => point[1]));
+                const rightEyeHeight = rightEyeBottom - rightEyeTop;
+                const rightEyeWidth = rightEye[1][0] - rightEye[0][0];
+                const rightEyeOpenness = rightEyeWidth > 0 ? rightEyeHeight / rightEyeWidth : 0;
+                
+                // 使用开合度判断睁眼闭眼状态
+                if (leftEyeOpenness < 0.1 && rightEyeOpenness < 0.1) {
+                    eyeStatus.textContent = '闭眼';
+                } else {
+                    eyeStatus.textContent = '睁眼';
+                }
+            } else {
+                eyeStatus.textContent = '未检测';
+            }
+            
+            // 嘴巴状态分析（使用更准确的关键点）
+            const mouthUpper = landmarks[13];
+            const mouthLower = landmarks[14];
+            const mouthLeft = landmarks[61];
+            const mouthRight = landmarks[291];
+            
+            // 确保关键点存在
+            if (mouthUpper && mouthLower && mouthLeft && mouthRight) {
+                const mouthHeight = Math.abs(mouthUpper[1] - mouthLower[1]);
+                const mouthWidth = Math.abs(mouthRight[0] - mouthLeft[0]);
+                
+                // 使用嘴巴高度与宽度的比值来判断张嘴状态
+                const mouthRatio = mouthHeight / mouthWidth;
+                
+                if (mouthRatio > 0.25) {
+                    mouthStatus.textContent = '张嘴';
+                } else {
+                    mouthStatus.textContent = '闭嘴';
+                }
+            } else {
+                mouthStatus.textContent = '未检测';
+            }
+        }
+        
+        // 生成面部特征数据字符串
+        function generateFeatureData(face) {
+            const featureData = {
+                confidence: face.faceInViewConfidence,
+                boundingBox: face.boundingBox ? {
+                    topLeft: face.boundingBox.topLeft,
+                    bottomRight: face.boundingBox.bottomRight
+                } : null,
+                scaledMesh: face.scaledMesh ? face.scaledMesh.slice(0, 50) : [] // 只取前50个关键点以减少数据量
+            };
+            
+            // 转换为字符串形式
+            const featureDataString = JSON.stringify(featureData, null, 2);
+            
+            // 显示在页面上
+            document.getElementById('feature-data').textContent = featureDataString;
+        }
+        
+        // 打开摄像头
+        async function setupCamera() {
+            try {
+                // 尝试获取摄像头设备
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                
+                if (videoDevices.length === 0) {
+                    throw new Error('没有找到摄像头设备');
+                }
+                
+                // 选择第一个摄像头
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: {
+                        width: 640,
+                        height: 480
+                    } 
+                });
+                
+                video.srcObject = stream;
+                videoStream = stream;
+                
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        // 保持 canvas 尺寸为 400x300
+                        canvas.width = 400;
+                        canvas.height = 300;
+                        resolve(video);
+                    };
+                });
+            } catch (error) {
+                console.error('打开摄像头时出错:', error);
+                throw error;
+            }
+        }
+        
+        // 处理视频帧
+        async function processVideo() {
+            if (!faceMesh || !videoStream) return;
+            
+            try {
+                // 使用 Face Mesh 检测人脸
+                const faces = await faceMesh.estimateFaces(video);
+                
+                // 清除画布
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 更新状态
+                detectionStatus.textContent = '检测中';
+                faceCount.textContent = faces.length;
+                
+                if (faces.length > 0) {
+                    // 处理每个人脸
+                    faces.forEach((face, index) => {
+                        // 绘制人脸检测框
+                        const box = face.boundingBox;
+                        if (box) {
+                            const x = (1 - box.bottomRight[0]) * canvas.width;
+                            const y = box.topLeft[1] * canvas.height;
+                            const width = (box.bottomRight[0] - box.topLeft[0]) * canvas.width;
+                            const height = (box.bottomRight[1] - box.topLeft[1]) * canvas.height;
+                            
+                            // 绘制检测框
+                            ctx.strokeStyle = '#FF0000';
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(x, y, width, height);
+                            
+                            // 更新人脸位置和大小信息
+                            if (index === 0) {
+                                facePosition.textContent = `X: ${Math.round(x)}, Y: ${Math.round(y)}`;
+                                faceSize.textContent = `宽: ${Math.round(width)}, 高: ${Math.round(height)}`;
+                                confidence.textContent = (face.faceInViewConfidence * 100).toFixed(2) + '%';
+                            }
+                        }
+                        
+                        // 绘制人脸关键点
+                        if (face.scaledMesh) {
+                            drawLandmarks(face.scaledMesh);
+                            
+                            // 更新关键点数量
+                            keypointCount.textContent = face.scaledMesh.length;
+                            
+                            // 分析面部特征
+                            analyzeFacialFeatures(face.scaledMesh);
+                            
+                            // 生成面部特征数据字符串
+                            if (index === 0) {
+                                generateFeatureData(face);
+                            }
+                        }
+                    });
+                } else {
+                    // 没有检测到人脸
+                    keypointCount.textContent = '0';
+                    eyeStatus.textContent = '未检测';
+                    mouthStatus.textContent = '未检测';
+                    confidence.textContent = '0';
+                    facePosition.textContent = '未检测';
+                    faceSize.textContent = '未检测';
+                    
+                    // 清空特征数据
+                    document.getElementById('feature-data').textContent = '未检测到人脸';
+                }
+            } catch (error) {
+                console.error('处理视频帧时出错:', error);
+            }
+            
+            // 继续处理下一帧
+            animationFrameId = requestAnimationFrame(processVideo);
+        }
+        
+        // 开始检测
+        async function startDetection() {
+            try {
+                // 加载 Face Mesh 模型
+                faceMesh = await facemesh.load({
+                    maxContinuousChecks: 5,
+                    detectionConfidence: 0.5,
+                    maxFaces: 1,
+                    scoreThreshold: 0.5
+                });
+                
+                // 确保摄像头已打开
+                if (!videoStream) {
+                    await setupCamera();
+                }
+                
+                // 开始处理视频
+                processVideo();
+                
+                // 更新按钮状态
+                startBtn.disabled = true;
+                startBtn.textContent = '检测中...';
+                stopBtn.disabled = false;
+                stopBtn.textContent = '停止检测';
+                detectionStatus.textContent = '检测中';
+            } catch (error) {
+                console.error('启动检测时出错:', error);
+                detectionStatus.textContent = '启动失败';
+                // 重置按钮状态
+                startBtn.disabled = false;
+                startBtn.textContent = '开始检测';
+                stopBtn.disabled = true;
+                stopBtn.textContent = '停止检测';
+            }
+        }
+        
+        // 停止检测
+        function stopDetection() {
+            // 取消动画帧
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            
+            // 停止视频流
+            if (videoStream) {
+                const tracks = videoStream.getTracks();
+                tracks.forEach(track => track.stop());
+                videoStream = null;
+                video.srcObject = null;
+            }
+            
+            // 清除画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 重置状态
+            startBtn.disabled = false;
+            startBtn.textContent = '开始检测';
+            stopBtn.disabled = true;
+            stopBtn.textContent = '停止检测';
+            detectionStatus.textContent = '已停止';
+            faceCount.textContent = '0';
+            keypointCount.textContent = '0';
+            eyeStatus.textContent = '未检测';
+            mouthStatus.textContent = '未检测';
+            confidence.textContent = '0';
+            facePosition.textContent = '未检测';
+            faceSize.textContent = '未检测';
+            
+            // 重置特征数据
+            document.getElementById('feature-data').textContent = '点击开始检测以获取面部特征数据';
+        }
+        
+        // 绑定按钮事件
+        startBtn.addEventListener('click', startDetection);
+        stopBtn.addEventListener('click', stopDetection);
+        
+        // 页面加载完成后自动打开摄像头
+        window.addEventListener('load', async () => {
+            try {
+                await setupCamera();
+                detectionStatus.textContent = '摄像头已就绪';
+            } catch (error) {
+                console.error('无法打开摄像头:', error);
+                detectionStatus.textContent = '无法打开摄像头';
+            }
+        });
+    </script>
+</body>
+</html>
