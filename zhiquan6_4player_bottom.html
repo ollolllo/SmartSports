@@ -290,7 +290,6 @@
         /* 共用滑动图片样式 - 在整个游戏容器上滑动 */
         .sliding-image {
             position: absolute;
-            bottom: 30px;
             left: -10vw;
             width: 5vw;
             height: 7.5vw;
@@ -299,7 +298,6 @@
             object-fit: contain;
             background-color: transparent;
             z-index: 100;
-            transition: left 3s ease-in-out;
         }
 
         /* 确保在所有屏幕尺寸上都能正常显示 */
@@ -434,10 +432,10 @@
         <!-- 退出全屏按钮 -->
         <button id="fullscreen-button" class="fullscreen-button">退出全屏</button>
         
-        <!-- 共用的滑动图片 - 在整个游戏容器上滑动 -->
-        <img id="sliding-image" src="/imgs/6.png" alt="滑动图片" class="sliding-image">
+        <!-- 共用的滑动图片 - 在整个游戏容器上滑动 --> 
+        <img id="sliding-image" src="/imgs/7.png" alt="滑动图片" class="sliding-image">
         
-        <!-- 4个玩家区域 - 全屏横向排列 -->
+        <!-- 4个玩家区域 - 全屏横向排列 --> 
         <div class="players-container">
             <!-- 玩家1 -->
             <div class="player-area">
@@ -530,170 +528,78 @@
             let isSwitched = false;
             let switchTimeout = null;
             
-            // 检查滑动图片是否在屏幕上
-            function checkSlidingImageVisible() {
-                if (!sharedSlidingImage) return;
-                
-                const slidingRect = sharedSlidingImage.getBoundingClientRect();
-                const containerRect = gameContainer.getBoundingClientRect();
-                
-                // 检查滑动图片是否在容器内
-                const isVisible = !(slidingRect.right < containerRect.left || 
-                                   slidingRect.left > containerRect.right);
-                
-                isSlidingImageVisible = isVisible;
-            }
-            
-            // 计算滑动图片与所有角色的距离，返回最近的距离
-            function calculateMinDistance() {
-                if (!sharedSlidingImage) return 9999;
-                
-                const slidingRect = sharedSlidingImage.getBoundingClientRect();
-                const slidingCenterX = slidingRect.left + slidingRect.width / 2;
-                
-                let minDistance = 9999;
-                
-                players.forEach(player => {
-                    if (!player.character) return;
-                    
-                    const characterRect = player.character.getBoundingClientRect();
-                    const characterCenterX = characterRect.left + characterRect.width / 2;
-                    const distance = Math.abs(slidingCenterX - characterCenterX);
-                    
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                    }
-                });
-                
-                return minDistance;
-            }
-            
-            // 检查是否有玩家正上方有物体
-            function hasObjectsInAnyProximity() {
-                return players.some(player => {
-                    if (!player.character) return false;
-                    
-                    const characterRect = player.character.getBoundingClientRect();
-                    const gameAreaRect = player.gameArea.getBoundingClientRect();
-                    const characterTop = characterRect.top - gameAreaRect.top;
-                    const proximityTop = characterTop - 130;
-                    
-                    return player.objects.some(obj => {
-                        return obj.y >= proximityTop && obj.y <= characterTop;
-                    });
-                });
-            }
-            
-            // 检查所有玩家的物体是否都已落下
-            function allObjectsFallen() {
-                return players.every(player => {
-                    if (!player.character) return true;
-                    
-                    const characterRect = player.character.getBoundingClientRect();
-                    const gameAreaRect = player.gameArea.getBoundingClientRect();
-                    const characterTop = characterRect.top - gameAreaRect.top;
-                    const proximityTop = characterTop - 130;
-                    
-                    return !player.objects.some(obj => {
-                        return obj.y >= proximityTop && obj.y <= characterTop;
-                    });
-                });
-            }
-            
-            // 处理接近逻辑
-            function handleProximity() {
-                const distance = calculateMinDistance();
-                
-                if (distance < 220 && !isInProximity) {
-                    isInProximity = true;
-                    
-                    if (hasObjectsInAnyProximity()) {
-                        // 情况A：有玩家正上方有物体
-                        isSlidingPaused = true;
-                        isJumpDisabled = true;
-                        
-                        const checkObjectsInterval = setInterval(() => {
-                            if (allObjectsFallen()) {
-                                clearInterval(checkObjectsInterval);
-                                isSlidingPaused = false;
-                                isJumpDisabled = false;
-                                isInProximity = false;
-                                
-                                const targetPosition = gameContainer.offsetWidth + 100;
-                                const currentLeft = parseFloat(sharedSlidingImage.style.left) || 0;
-                                const remainingDistance = targetPosition - currentLeft;
-                                const speed = Math.random() * 40 + 80;
-                                const transitionTime = remainingDistance / speed;
-                                sharedSlidingImage.style.transition = `left ${transitionTime}s linear`;
-                                sharedSlidingImage.style.left = targetPosition + 'px';
-                            }
-                        }, 100);
-                    } else {
-                        // 情况B：没有玩家正上方有物体
-                        isObjectsPaused = true;
-                    }
-                } else if (distance > 100) {
-                    isInProximity = false;
-                    isObjectsPaused = false;
-                }
-            }
-            
-            // 碰撞检测函数 - 检测与所有玩家的碰撞
-            function checkCollision() {
-                if (!sharedSlidingImage) return;
-                
-                const slidingRect = sharedSlidingImage.getBoundingClientRect();
-                
-                players.forEach(player => {
-                    if (!player.expressionImage || !player.character) return;
-                    
-                    // 检查角色是否在跳跃，如果是则不进行碰撞检测
-                    if (player.character.classList.contains('jumping')) {
-                        return;
-                    }
-                    
-                    const expressionRect = player.expressionImage.getBoundingClientRect();
-                    
-                    // 检测滑动图片与该玩家是否相交
-                    const isColliding = !(slidingRect.right < expressionRect.left || 
-                                         slidingRect.left > expressionRect.right || 
-                                         slidingRect.bottom < expressionRect.top || 
-                                         slidingRect.top > expressionRect.bottom);
-                    
-                    if (isColliding && !isSwitched) {
-                        // 切换到2.png
-                        player.expressionImage.src = '/imgs/2.png';
-                        
-                        // 清除之前的定时器
-                        if (switchTimeout) {
-                            clearTimeout(switchTimeout);
-                        }
-                        
-                        isSwitched = true;
-                        
-                        // 2秒后恢复默认图片
-                        switchTimeout = setTimeout(() => {
-                            players.forEach(p => {
-                                if (p.expressionImage) {
-                                    p.expressionImage.src = expressions.default;
-                                }
-                            });
-                            isSwitched = false;
-                        }, 2000);
-                    }
-                });
-            }
-            
             // 滑动函数
             function slideIn() {
-                if (!gameRunning) {
+                console.log('slideIn called');
+                
+                // 检查是否有任何一个玩家的游戏正在运行
+                const anyPlayerRunning = players.some(player => player.gameRunning);
+                if (!anyPlayerRunning) {
+                    console.log('No player game running, waiting...');
                     setTimeout(slideIn, 500);
                     return;
                 }
                 
-                // 重置位置到左侧屏幕外
+                console.log('Player game is running, starting slide');
+                
+                // 随机决定滑动方向：true为从左到右，false为从右到左
+                const slideFromLeft = Math.random() > 0.5;
+                console.log('Slide direction:', slideFromLeft ? 'left to right' : 'right to left');
+                
+                // 随机选择一个玩家的表情图片
+                const playerIndex = Math.floor(Math.random() * 4) + 1;
+                const expressionImage = document.getElementById(`expression-image-${playerIndex}`);
+                
+                if (!expressionImage) {
+                    console.log('Expression image not found for player', playerIndex);
+                    setTimeout(slideIn, 500);
+                    return;
+                }
+                
+                console.log('Selected player:', playerIndex);
+                
+                // 重置位置
                 sharedSlidingImage.style.transition = 'none';
-                sharedSlidingImage.style.left = '-10vw';
+                
+                // 计算表情图片的位置
+                const expressionRect = expressionImage.getBoundingClientRect();
+                const gameContainerRect = gameContainer.getBoundingClientRect();
+                const expressionTop = expressionRect.top - gameContainerRect.top;
+                const expressionLeft = expressionRect.left - gameContainerRect.left;
+                const expressionWidth = expressionRect.width;
+                
+                console.log('Expression position:', { top: expressionTop, left: expressionLeft, width: expressionWidth });
+                
+                // 确保滑动图片有高度
+                const slidingImageHeight = sharedSlidingImage.offsetHeight || 90; // 使用默认高度作为 fallback
+                console.log('Sliding image height:', slidingImageHeight);
+                
+                // 设置图片顶部位置为表情图片正上方3像素
+                const slidingTop = expressionTop - 3 - slidingImageHeight;
+                sharedSlidingImage.style.top = slidingTop + 'px';
+                console.log('Sliding image top position:', slidingTop);
+                
+                // 根据方向设置初始位置和目标位置，确保完整滑动整个游戏容器
+                let startLeft, targetLeft;
+                if (slideFromLeft) {
+                    // 从左到右：从容器左侧外开始，滑动到容器右侧外
+                    startLeft = -200;
+                    targetLeft = gameContainer.offsetWidth + 200;
+                } else {
+                    // 从右到左：从容器右侧外开始，滑动到容器左侧外
+                    startLeft = gameContainer.offsetWidth + 200;
+                    targetLeft = -200;
+                }
+                sharedSlidingImage.style.left = startLeft + 'px';
+                console.log('Sliding image start left position:', startLeft);
+                
+                // 确保滑动图片可见
+                sharedSlidingImage.style.display = 'block';
+                sharedSlidingImage.style.visibility = 'visible';
+                sharedSlidingImage.style.opacity = '1';
+                
+                console.log('Sliding image visibility set to visible');
+                
                 isSwitched = false;
                 isSlidingImageVisible = false;
                 isInProximity = false;
@@ -701,34 +607,91 @@
                 // 强制重排
                 sharedSlidingImage.offsetHeight;
                 
-                // 计算滑动到右侧屏幕外的位置
-                const targetPosition = gameContainer.offsetWidth + 100;
-                const slideDistance = targetPosition + gameContainer.offsetWidth * 0.1;
+                console.log('Sliding image target position:', targetLeft);
                 
                 // 生成80-120像素/秒之间的随机速度
                 const speed = Math.random() * 40 + 80;
+                const slideDistance = Math.abs(targetLeft - startLeft);
                 const transitionTime = slideDistance / speed;
+                console.log('Sliding speed:', speed, 'px/s, transition time:', transitionTime, 's');
                 
                 // 开始滑动
                 sharedSlidingImage.style.transition = `left ${transitionTime}s linear`;
-                sharedSlidingImage.style.left = targetPosition + 'px';
+                sharedSlidingImage.style.left = targetLeft + 'px';
                 
-                // 定期检查碰撞、滑动图片可见性和距离
+                console.log('Sliding started');
+                
+                // 定期检查碰撞
                 const checkInterval = setInterval(() => {
-                    if (!isSlidingPaused) {
-                        checkCollision();
-                        checkSlidingImageVisible();
-                        handleProximity();
-                    }
+                    if (!sharedSlidingImage) return;
+                    
+                    const slidingRect = sharedSlidingImage.getBoundingClientRect();
+                    
+                    players.forEach(player => {
+                        if (!player.expressionImage || !player.character || !player.gameRunning) return;
+                        
+                        // 检查角色是否在跳跃
+                        if (player.character.classList.contains('jumping')) {
+                            const expressionRect = player.expressionImage.getBoundingClientRect();
+                            
+                            // 检测滑动图片与该玩家是否相交
+                            const isColliding = !(slidingRect.right < expressionRect.left || 
+                                                 slidingRect.left > expressionRect.right || 
+                                                 slidingRect.bottom < expressionRect.top || 
+                                                 slidingRect.top > expressionRect.bottom);
+                            
+                            if (isColliding) {
+                                // 切换到开心表情
+                                console.log('玩家', player.id, '跳跃碰到滑动图片，切换到开心表情');
+                                if (player.expressionImage) {
+                                    player.expressionImage.src = '/imgs/5.png';
+                                    player.character.style.backgroundColor = "transparent";
+                                }
+                                
+                                // 显示弹幕
+                                console.log('显示弹幕: 太美味啦！');
+                                
+                                // 创建并显示弹幕
+                                const characterRect = player.character.getBoundingClientRect();
+                                const gameAreaRect = player.gameArea.getBoundingClientRect();
+                                
+                                const messageElement = document.createElement('div');
+                                messageElement.className = '弹幕';
+                                messageElement.textContent = '太美味啦！';
+                                messageElement.style.left = `${characterRect.left - gameAreaRect.left + characterRect.width / 2}px`;
+                                messageElement.style.top = `${characterRect.top - gameAreaRect.top - 50}px`;
+                                messageElement.style.transform = 'translateX(-50%)';
+                                
+                                player.gameArea.appendChild(messageElement);
+                                
+                                setTimeout(() => {
+                                    if (messageElement.parentNode) {
+                                        messageElement.parentNode.removeChild(messageElement);
+                                    }
+                                }, 2000);
+                                
+                                // 2秒后恢复默认表情
+                                setTimeout(() => {
+                                    console.log('恢复默认表情');
+                                    if (player.expressionImage) {
+                                        player.expressionImage.src = expressions.default;
+                                        player.character.style.backgroundColor = "transparent";
+                                    }
+                                }, 2000);
+                            }
+                        }
+                    });
                 }, 50);
                 
                 // 滑动完成后，随机延迟后再次滑动
                 sharedSlidingImage.addEventListener('transitionend', function onTransitionEnd() {
                     sharedSlidingImage.removeEventListener('transitionend', onTransitionEnd);
                     clearInterval(checkInterval);
+                    console.log('Sliding completed');
                     
                     // 随机延迟3-8秒后再次滑动
                     const delay = Math.random() * 5000 + 3000;
+                    console.log('Waiting', delay, 'ms before next slide');
                     setTimeout(slideIn, delay);
                 });
             }
