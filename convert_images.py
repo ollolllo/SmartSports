@@ -3,10 +3,13 @@ import os
 
 # 图片文件路径
 image_paths = {
-    'default': 'imgs/1.png',
-    'happy': 'imgs/4.png',
-    'proud': 'imgs/5.png',
-    'crying': 'imgs/3.png'
+    '1': 'D:\\Program Files\\nginx-1.26.3\\html\\imgs\\1.png',
+    '2': 'D:\\Program Files\\nginx-1.26.3\\html\\imgs\\2.png',
+    '3': 'D:\\Program Files\\nginx-1.26.3\\html\\imgs\\3.png',
+    '4': 'D:\\Program Files\\nginx-1.26.3\\html\\imgs\\4.png',
+    '5': 'D:\\Program Files\\nginx-1.26.3\\html\\imgs\\5.png',
+    '6': 'D:\\Program Files\\nginx-1.26.3\\html\\imgs\\6.png',
+    '7': 'D:\\Program Files\\nginx-1.26.3\\html\\imgs\\7.png'
 }
 
 # 转换图片为base64
@@ -18,6 +21,11 @@ for key, path in image_paths.items():
             base64_str = base64.b64encode(img_data).decode('utf-8')
             base64_images[key] = f'data:image/png;base64,{base64_str}'
         print(f'{key}: {base64_images[key][:50]}...')  # 只打印前50个字符
+        
+        # 写入对应的txt文件
+        with open(f'{key}.txt', 'w', encoding='utf-8') as f:
+            f.write(base64_images[key])
+        print(f'Base64 image has been written to {key}.txt')
     else:
         print(f'File not found: {path}')
 
