@@ -28,6 +28,9 @@ for x in range(width):
         if r > 200 and g > 200 and b > 200:
             pixels[x, y] = (255, 255, 255, 0)
 
+# 调整图片大小为100像素X100像素
+img = img.resize((100, 100), Image.LANCZOS)
+
 # 保存处理后的图片，替换7.png
 img.save(output_image_path, "PNG")
 
