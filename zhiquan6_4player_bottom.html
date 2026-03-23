@@ -644,12 +644,12 @@
                                 // 切换到开心表情
                                 console.log('玩家', player.id, '跳跃碰到滑动图片，切换到开心表情');
                                 if (player.expressionImage) {
-                                    player.expressionImage.src = '/imgs/5.png';
+                                    player.expressionImage.src = expressions.proud;
                                     player.character.style.backgroundColor = "transparent";
                                 }
                                 
                                 // 显示弹幕
-                                console.log('显示弹幕: 太美味啦！');
+                                console.log('显示弹幕: 好吃！');
                                 
                                 // 创建并显示弹幕
                                 const characterRect = player.character.getBoundingClientRect();
@@ -657,7 +657,7 @@
                                 
                                 const messageElement = document.createElement('div');
                                 messageElement.className = '弹幕';
-                                messageElement.textContent = '太美味啦！';
+                                messageElement.textContent = '好吃！';
                                 messageElement.style.left = `${characterRect.left - gameAreaRect.left + characterRect.width / 2}px`;
                                 messageElement.style.top = `${characterRect.top - gameAreaRect.top - 50}px`;
                                 messageElement.style.transform = 'translateX(-50%)';
@@ -940,6 +940,23 @@
                     if (action === "左手举起" && player.gameRunning) {
                         togglePlayerGame(playerIndex);
                     }
+                    
+                    // 跳跃逻辑：只针对当前玩家
+                    if (action === "跳起来" && !isJumpDisabled) {
+                        const character = player.character;
+                        if (character && !character.classList.contains('jumping') && !character.classList.contains('jump-cooling')) {
+                            character.classList.add('jumping');
+                            character.style.transform = 'translateY(-120px)';
+                            setTimeout(() => {
+                                character.style.transform = 'translateY(0)';
+                                character.classList.remove('jumping');
+                                character.classList.add('jump-cooling');
+                                setTimeout(() => {
+                                    character.classList.remove('jump-cooling');
+                                }, 2000);
+                            }, 2000);
+                        }
+                    }
                 }
             }
 
@@ -958,7 +975,7 @@
 
             recognizeActionForPlayer(landmarks) {
                 // 检查是否有足够的关键点
-                const requiredLandmarks = [0, 11, 12, 15, 16]; // 鼻子、左右肩膀、左右手腕
+                const requiredLandmarks = [0, 11, 12, 15, 16, 23, 24]; // 鼻子、左右肩膀、左右手腕、左右髋部
                 const hasRequiredLandmarks = requiredLandmarks.every(idx => landmarks[idx]);
                 
                 if (!hasRequiredLandmarks) {
@@ -970,6 +987,8 @@
                 const leftWrist = landmarks[15];
                 const rightWrist = landmarks[16];
                 const nose = landmarks[0];
+                const leftHip = landmarks[23];
+                const rightHip = landmarks[24];
 
                 const calculateDistance = (point1, point2) => {
                     return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
@@ -986,6 +1005,10 @@
                 const isHandsOnHead = leftWristToNose < 0.3 && rightWristToNose < 0.3;
                 const isBothHandsRaised = leftArmRaised && rightArmRaised;
                 const isRightHandRaised = rightArmRaised && !leftArmRaised;
+                
+                // 检测跳跃
+                const hipY = (leftHip.y + rightHip.y) / 2;
+                const isJumping = hipY < 0.4;
 
                 // 简单的动作检测逻辑
                 if (isHandsOnHead) {
@@ -996,6 +1019,8 @@
                     return "左手举起";
                 } else if (leftArmRaised) {
                     return "举起右手";
+                } else if (isJumping) {
+                    return "跳起来";
                 } else {
                     return "站立";
                 }
@@ -1126,9 +1151,6 @@
                 }
                 else if (isBothHandsRaised) {
                     detectedAction = '举起双手';
-                }
-                else if (this.detectJump(landmarks)) {
-                    detectedAction = '跳起来';
                 }
 
                 currentAction = detectedAction;
