@@ -140,9 +140,46 @@
             min-height: 30px;
         }
 
-        .action-display {
+        .score-display {
             position: absolute;
             top: 35px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: #ffd700;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 2px 10px;
+            border-radius: 10px;
+            z-index: 20;
+            white-space: nowrap;
+            text-align: center;
+            min-width: 80px;
+            text-shadow: 0 0 5px rgba(255, 215, 0, 0.8);
+        }
+
+        .score-change {
+            animation: score-animation 0.5s ease-out;
+        }
+
+        @keyframes score-animation {
+            0% {
+                transform: translateX(-50%) scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: translateX(-50%) scale(1.2);
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .action-display {
+            position: absolute;
+            top: 60px;
             left: 50%;
             transform: translateX(-50%);
             font-size: 12px;
@@ -224,6 +261,130 @@
                 opacity: 0;
                 transform: translateY(-100px);
             }
+        }
+
+        /* 排名浮窗样式 */
+        #game-rankings {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            z-index: 1000;
+            min-width: 300px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .ranking-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ffd700;
+        }
+
+        .ranking-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 24px;
+        }
+
+        #close-ranking {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        #close-ranking:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .podium {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .podium-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .rank-1 {
+            background: linear-gradient(to top, #ffd700, #ffed4e);
+            height: 180px;
+            width: 100px;
+        }
+
+        .rank-2 {
+            background: linear-gradient(to top, #c0c0c0, #e8e8e8);
+            height: 140px;
+            width: 100px;
+        }
+
+        .rank-3 {
+            background: linear-gradient(to top, #cd7f32, #e6b422);
+            height: 100px;
+            width: 100px;
+        }
+
+        .rank-number {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .podium-step .player-avatar {
+            margin: 20px 0 10px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        .player-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .player-score {
+            font-size: 14px;
+            color: #666;
         }
 
         .start-button {
@@ -460,6 +621,7 @@
             <!-- 玩家1 -->
             <div class="player-area">
                 <div class="player-title">玩家1</div>
+                <div class="score-display" id="score-display-1">积分: 0</div>
                 <div class="action-display" id="action-display-1">未检测到人</div>
                 <div class="game-area" id="game-area-1">
                     <div class="character" id="character-1">
@@ -471,6 +633,7 @@
             <!-- 玩家2 -->
             <div class="player-area">
                 <div class="player-title">玩家2</div>
+                <div class="score-display" id="score-display-2">积分: 0</div>
                 <div class="action-display" id="action-display-2">未检测到人</div>
                 <div class="game-area" id="game-area-2">
                     <div class="character" id="character-2">
@@ -482,6 +645,7 @@
             <!-- 玩家3 -->
             <div class="player-area">
                 <div class="player-title">玩家3</div>
+                <div class="score-display" id="score-display-3">积分: 0</div>
                 <div class="action-display" id="action-display-3">未检测到人</div>
                 <div class="game-area" id="game-area-3">
                     <div class="character" id="character-3">
@@ -493,6 +657,7 @@
             <!-- 玩家4 -->
             <div class="player-area">
                 <div class="player-title">玩家4</div>
+                <div class="score-display" id="score-display-4">积分: 0</div>
                 <div class="action-display" id="action-display-4">未检测到人</div>
                 <div class="game-area" id="game-area-4">
                     <div class="character" id="character-4">
@@ -536,7 +701,8 @@
                 expressionImage: document.getElementById(`expression-image-${id}`),
                 objects: [],
                 currentAction: "未检测到人",
-                gameRunning: false
+                gameRunning: false,
+                score: 0
             };
         }
         
@@ -667,6 +833,9 @@
                                     player.expressionImage.src = expressions.proud;
                                     player.character.style.backgroundColor = "transparent";
                                 }
+                                
+                                // 滑动图片碰撞 +5分
+                                updatePlayerScore(player, 5);
                                 
                                 // 显示弹幕
                                 console.log('显示弹幕: 好吃！');
@@ -1325,6 +1494,49 @@
                 });
                 player.objects = [];
             });
+            
+            // 显示游戏结束排名
+            showGameRankings();
+        }
+        
+        // 显示游戏排名
+        function showGameRankings() {
+            // 按分数排序玩家
+            const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+            const topPlayers = sortedPlayers.slice(0, 3);
+            
+            // 创建排名浮窗
+            const rankingContainer = document.createElement('div');
+            rankingContainer.id = 'game-rankings';
+            rankingContainer.innerHTML = `
+                <div class="ranking-header">
+                    <h2>游戏排名</h2>
+                    <button id="close-ranking">×</button>
+                </div>
+                <div class="ranking-content">
+                    <div class="podium">
+                        ${topPlayers.map((player, index) => {
+                            const avatarElement = document.querySelector(`.player-area:nth-child(${player.id}) .player-avatar`);
+                            const avatarStyle = avatarElement ? avatarElement.style.backgroundImage : '';
+                            return `
+                                <div class="podium-step rank-${index + 1}">
+                                    <div class="rank-number">${index + 1}</div>
+                                    <div class="player-avatar" style="${avatarStyle}"></div>
+                                    <div class="player-name">玩家${player.id}</div>
+                                    <div class="player-score">${player.score}分</div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(rankingContainer);
+            
+            // 关闭按钮事件
+            document.getElementById('close-ranking').addEventListener('click', () => {
+                document.body.removeChild(rankingContainer);
+            });
         }
         
         // 游戏主循环
@@ -1544,6 +1756,8 @@
                         player.expressionImage.src = expressions.happy;
                         player.character.style.backgroundColor = "transparent";
                     }
+                    // 金元宝碰撞 +3分
+                    updatePlayerScore(player, 3);
                 } else {
                     console.log("金元宝落下但动作不是举起双手，不显示弹幕");
                 }
@@ -1564,6 +1778,8 @@
                         player.expressionImage.src = expressions.crying;
                         player.character.style.backgroundColor = "transparent";
                     }
+                    // 石头碰撞 -2分
+                    updatePlayerScore(player, -2);
                 }
             }
             
@@ -1578,6 +1794,27 @@
                     player.character.style.backgroundColor = "transparent";
                 }
             }, 2000);
+        }
+        
+        // 更新玩家积分
+        function updatePlayerScore(player, points) {
+            // 更新积分
+            player.score += points;
+            // 确保积分不会小于0
+            if (player.score < 0) {
+                player.score = 0;
+            }
+            
+            // 更新积分显示
+            const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+            if (scoreDisplay) {
+                scoreDisplay.textContent = `积分: ${player.score}`;
+                // 添加积分变动动画
+                scoreDisplay.classList.add('score-change');
+                setTimeout(() => {
+                    scoreDisplay.classList.remove('score-change');
+                }, 500);
+            }
         }
         
         // 显示弹幕
