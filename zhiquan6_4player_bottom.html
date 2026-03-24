@@ -1453,8 +1453,8 @@
                     });
                 }
 
-                if (objRight > charLeft && objLeft < charRight &&
-                    objBottom > charTop && objTop < charBottom) {
+                if (objRight > charLeft + 15 && objLeft < charRight - 15 &&
+                    objBottom > charTop + 15 && objTop < charBottom - 15) {
 
                     handleCollision(player, obj);
 
