@@ -1375,26 +1375,92 @@
         
         // 检测碰撞
         function checkCollisions(player) {
-            if (!player.character || !player.gameRunning) return;
-            
-            const characterRect = player.character.getBoundingClientRect();
+            if (!player.character || !player.expressionImage || !player.gameRunning) return;
+
+            const expressionRect = player.expressionImage.getBoundingClientRect();
             const gameAreaRect = player.gameArea.getBoundingClientRect();
-            
-            const relativeUnit = player.gameArea.offsetHeight * 0.01;
-            const objectSize = relativeUnit * 3;
-            
+
+            // 计算表情图片的实际可见区域
+            let charLeft = expressionRect.left - gameAreaRect.left;
+            let charRight = expressionRect.right - gameAreaRect.left;
+            let charTop = expressionRect.top - gameAreaRect.top;
+            let charBottom = expressionRect.bottom - gameAreaRect.top;
+
+            // 考虑object-fit: contain的情况，计算实际图片内容的边界
+            const img = player.expressionImage;
+            if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+                const imgAspectRatio = img.naturalWidth / img.naturalHeight;
+                const containerAspectRatio = (charRight - charLeft) / (charBottom - charTop);
+
+                if (imgAspectRatio > containerAspectRatio) {
+                    // 图片比容器宽，垂直居中，计算实际高度
+                    const actualHeight = (charRight - charLeft) / imgAspectRatio;
+                    const padding = ((charBottom - charTop) - actualHeight) / 2;
+                    charTop += padding;
+                    charBottom -= padding;
+                } else {
+                    // 图片比容器高，水平居中，计算实际宽度
+                    const actualWidth = (charBottom - charTop) * imgAspectRatio;
+                    const padding = ((charRight - charLeft) - actualWidth) / 2;
+                    charLeft += padding;
+                    charRight -= padding;
+                }
+            }
+
             player.objects.forEach((obj, index) => {
                 const objRect = obj.element.getBoundingClientRect();
-                
-                if (obj.y + objectSize >= characterRect.top - gameAreaRect.top &&
-                    obj.x + objectSize >= characterRect.left - gameAreaRect.left &&
-                    obj.x <= characterRect.right - gameAreaRect.left) {
-                    
+
+                // 计算石头/元宝的实际可见区域
+                let objLeft = objRect.left - gameAreaRect.left;
+                let objRight = objRect.right - gameAreaRect.left;
+                let objTop = objRect.top - gameAreaRect.top;
+                let objBottom = objRect.bottom - gameAreaRect.top;
+
+                // 考虑background-size: contain的情况，计算实际图片内容的边界
+                // 假设石头和元宝图片的原始宽高比例
+                const objType = obj.type;
+                let objAspectRatio = 1; // 默认正方形
+                if (objType === 'gold') {
+                    // 金元宝图片的宽高比例（根据实际图片调整）
+                    objAspectRatio = 1; // 假设是正方形
+                } else if (objType === 'stone') {
+                    // 石头图片的宽高比例（根据实际图片调整）
+                    objAspectRatio = 1; // 假设是正方形
+                }
+
+                const objContainerAspectRatio = (objRight - objLeft) / (objBottom - objTop);
+
+                if (objAspectRatio > objContainerAspectRatio) {
+                    // 图片比容器宽，垂直居中，计算实际高度
+                    const actualHeight = (objRight - objLeft) / objAspectRatio;
+                    const padding = ((objBottom - objTop) - actualHeight) / 2;
+                    objTop += padding;
+                    objBottom -= padding;
+                } else {
+                    // 图片比容器高，水平居中，计算实际宽度
+                    const actualWidth = (objBottom - objTop) * objAspectRatio;
+                    const padding = ((objRight - objLeft) - actualWidth) / 2;
+                    objLeft += padding;
+                    objRight -= padding;
+                }
+
+                // 调试信息
+                if (objBottom > charTop && objTop < charBottom && objRight > charLeft && objLeft < charRight) {
+                    console.log('碰撞检测触发:', {
+                        obj: { top: objTop, bottom: objBottom, left: objLeft, right: objRight, height: objBottom - objTop },
+                        char: { top: charTop, bottom: charBottom, left: charLeft, right: charRight, height: charBottom - charTop },
+                        gameAreaHeight: gameAreaRect.height
+                    });
+                }
+
+                if (objRight > charLeft && objLeft < charRight &&
+                    objBottom > charTop && objTop < charBottom) {
+
                     handleCollision(player, obj);
-                    
+
                     player.gameArea.removeChild(obj.element);
                     player.objects.splice(index, 1);
-                    
+
                     checkAndSpawnNextObject(player);
                 }
             });
