@@ -178,7 +178,7 @@
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
-            width: 10%;
+            width: 20%;
             height: auto;
         }
 
@@ -1293,7 +1293,7 @@
             const horizontalRange = relativeUnit * 6;
             const object = {
                 type: Math.random() > 0.5 ? 'gold' : 'stone',
-                x: characterCenterX + (Math.random() * horizontalRange - horizontalRange / 2),
+                x: characterCenterX + (Math.random() * horizontalRange - horizontalRange / 0.9 ),
                 y: -relativeUnit * 4,
                 speed: Math.random() * relativeUnit * 0.6 + relativeUnit * 0.6,
                 originalSpeed: 0,
@@ -1306,7 +1306,7 @@
                 object.speed = object.originalSpeed / 2;
             }
 
-            const objectSize = player.gameArea.offsetWidth * 0.1;
+            const objectSize = player.gameArea.offsetWidth * 0.2;
             if (object.x < 0) object.x = 0;
             if (object.x > player.gameArea.offsetWidth - objectSize) object.x = player.gameArea.offsetWidth - objectSize;
             
