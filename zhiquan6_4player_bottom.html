@@ -1125,10 +1125,10 @@
                         togglePlayerGame(playerIndex);
                     }
                     
-                    // 游戏停止判断：如果玩家举起左手且游戏正在运行，则停止该玩家的游戏
-                    if (action === "左手举起" && player.gameRunning) {
-                        togglePlayerGame(playerIndex);
-                    }
+                    // 举起左手的判断暂时保留，但是不响应任何逻辑
+                    // if (action === "左手举起" && player.gameRunning) {
+                    //     togglePlayerGame(playerIndex);
+                    // }
                     
                     // 跳跃逻辑：只针对当前玩家
                     if (action === "跳起来" && !isJumpDisabled) {
@@ -1401,6 +1401,8 @@
                         togglePlayerGame(player.id);
                     }
                 });
+                // 显示游戏排名
+                showGameRankings();
             }
         }
         
@@ -1456,6 +1458,13 @@
             if (player.gameRunning) {
                 // 开始该玩家的游戏
                 player.objects = [];
+                // 清零积分
+                player.score = 0;
+                // 更新积分显示
+                const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+                if (scoreDisplay) {
+                    scoreDisplay.textContent = `积分: ${player.score}`;
+                }
                 spawnObjects(player);
                 
                 // 拍摄玩家头像
