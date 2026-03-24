@@ -124,6 +124,20 @@
             padding: 2px 10px;
             border-radius: 10px;
             z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-avatar {
+            width: 10%;
+            padding-bottom: 10%;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            min-width: 30px;
+            min-height: 30px;
         }
 
         .action-display {
@@ -297,8 +311,8 @@
         .sliding-image {
             position: absolute;
             left: -10vw;
-            width: 10%;
-            height: 10%;
+            width: 8%;
+            height: auto;
             object-fit: contain;
             background-color: transparent;
             z-index: 100;
@@ -1222,6 +1236,48 @@
         }
         
         // 切换玩家游戏状态
+        // 处理玩家头像
+        function capturePlayerAvatar(playerIndex) {
+            const video = document.getElementById('camera');
+            if (!video || !video.srcObject) return;
+
+            // 创建canvas用于拍照
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // 假设使用MediaPipe Face Mesh进行人脸检测
+            // 这里简化处理，直接截取中心区域作为头像
+            const faceSize = Math.min(canvas.width, canvas.height) * 0.3;
+            const faceX = (canvas.width - faceSize) / 2;
+            const faceY = (canvas.height - faceSize) / 2;
+
+            // 创建新的canvas用于截取头像
+            const avatarCanvas = document.createElement('canvas');
+            avatarCanvas.width = faceSize;
+            avatarCanvas.height = faceSize;
+            const avatarCtx = avatarCanvas.getContext('2d');
+            avatarCtx.drawImage(canvas, faceX, faceY, faceSize, faceSize, 0, 0, faceSize, faceSize);
+
+            // 转换为base64
+            const avatarDataUrl = avatarCanvas.toDataURL('image/png');
+
+            // 显示头像
+            const playerTitle = document.querySelector(`.player-area:nth-child(${playerIndex}) .player-title`);
+            if (playerTitle) {
+                // 检查是否已有头像
+                let avatarElement = playerTitle.querySelector('.player-avatar');
+                if (!avatarElement) {
+                    avatarElement = document.createElement('div');
+                    avatarElement.className = 'player-avatar';
+                    playerTitle.appendChild(avatarElement);
+                }
+                avatarElement.style.backgroundImage = `url('${avatarDataUrl}')`;
+            }
+        }
+
         function togglePlayerGame(playerIndex) {
             const player = players.find(p => p.id === playerIndex);
             if (!player) return;
@@ -1232,6 +1288,9 @@
                 // 开始该玩家的游戏
                 player.objects = [];
                 spawnObjects(player);
+                
+                // 拍摄玩家头像
+                capturePlayerAvatar(playerIndex);
             } else {
                 // 停止该玩家的游戏
                 player.objects.forEach(obj => {
