@@ -772,7 +772,8 @@
                 currentAction: "未检测到人",
                 gameRunning: false,
                 score: 0,
-                avatar: ''
+                avatar: '',
+                isCollisionExpression: false
             };
         }
         
@@ -897,6 +898,9 @@
                                                  slidingRect.top > expressionRect.bottom);
                             
                             if (isColliding) {
+                                // 设置碰撞表情标志
+                                player.isCollisionExpression = true;
+                                
                                 // 切换到开心表情
                                 console.log('玩家', player.id, '跳跃碰到滑动图片，切换到开心表情');
                                 if (player.expressionImage) {
@@ -936,6 +940,8 @@
                                         player.expressionImage.src = expressions.default;
                                         player.character.style.backgroundColor = "transparent";
                                     }
+                                    // 重置碰撞表情标志
+                                    player.isCollisionExpression = false;
                                 }, 2000);
                             }
                         }
@@ -1183,11 +1189,26 @@
                 if (player) {
                     // 更新玩家的动作状态
                     player.currentAction = action;
+ 
                     
                     // 显示动作到对应的玩家区域
                     const actionDisplay = document.getElementById(`action-display-${playerIndex}`);
                     if (actionDisplay) {
                         actionDisplay.textContent = action;
+                    }
+                    
+                    // 根据动作更新表情，只有当没有碰撞表情切换时才更新
+                    if (player.expressionImage && !player.isCollisionExpression) {
+                        if (player.currentAction === "举起双手" ||player.currentAction === "双手举起"||player.currentAction === "双手上举") {
+                            player.expressionImage.src = expressions.handup;
+                        } else if (player.currentAction === "跳起来") {
+                            player.expressionImage.src = expressions.fly;
+                        } else if (player.currentAction === "双手抱头") {
+                            player.expressionImage.src = expressions.danger;
+                        } else {
+                            // 其他动作恢复默认表情
+                            player.expressionImage.src = expressions.default;
+                        }
                     }
                     
                     // 游戏开始判断：如果玩家举起右手且游戏未运行，则启动该玩家的游戏
@@ -1852,10 +1873,13 @@
                 return;
             }
             
+            // 设置碰撞表情标志
+            player.isCollisionExpression = true;
+            
             if (obj.type === 'gold') {
                 if (player.currentAction === "举起双手" || player.currentAction === "双手上举") {
-                    message = "赞";
-                    console.log("显示弹幕: 赞");
+                    message = "耶~~~";
+                    console.log("显示弹幕: 耶~~~");
                     console.log("切换到开心表情");
                     if (player.expressionImage) {
                         player.expressionImage.src = expressions.happy;
@@ -1865,6 +1889,7 @@
                     updatePlayerScore(player, 3);
                 } else {
                     console.log("金元宝落下但动作不是举起双手，不显示弹幕");
+                    player.isCollisionExpression = false;
                 }
             } else {
                 if (player.currentAction === "双手抱头") {
@@ -1898,6 +1923,8 @@
                     player.expressionImage.src = expressions.default;
                     player.character.style.backgroundColor = "transparent";
                 }
+                // 重置碰撞表情标志
+                player.isCollisionExpression = false;
             }, 2000);
         }
         
