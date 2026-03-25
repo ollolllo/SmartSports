@@ -1093,13 +1093,13 @@
                             });
 
                             this.pose.setOptions({
-                                modelComplexity: 1,
+                                modelComplexity: 1, // 降低模型复杂度以提高性能
                                 smoothLandmarks: true,
                                 enableSegmentation: false,
                                 smoothSegmentation: false,
                                 minDetectionConfidence: 0.3,
                                 minTrackingConfidence: 0.3,
-                                selfieMode: true
+                                selfieMode: false
                             });
 
                             this.pose.onResults((results) => this.onPoseResults(results));
@@ -1144,9 +1144,9 @@
 
             onPoseResults(results) {
                 // 检查多人检测结果
-                if (results.poseLandmarksArray && results.poseLandmarksArray.length > 0) {
-                    // 多人模式：results.poseLandmarksArray 是数组
-                    this.processMultiplePoses(results.poseLandmarksArray);
+                if (results.multiPoseLandmarks && results.multiPoseLandmarks.length > 0) {
+                    // 多人模式：results.multiPoseLandmarks 是数组
+                    this.processMultiplePoses(results.multiPoseLandmarks);
                 } else if (results.poseLandmarks) {
                     // 单人模式：results.poseLandmarks 是单个对象
                     // 对于单人模式，将其分配给玩家1
@@ -1167,7 +1167,7 @@
                 // 1. 按水平位置排序（从左到右）
                 // 注意：当selfieMode为true时，MediaPipe已经处理了镜像，所以坐标是正确的
                 const sortedPoses = poses
-                    .filter(pose => pose[0]) // 确保有鼻子点
+                    .filter(pose => pose && pose[0]) // 确保有姿态数据和鼻子点
                     .sort((a, b) => a[0].x - b[0].x);
 
                 // 2. 分配到4个玩家位置
@@ -1288,6 +1288,7 @@
                 const isHandsOnHead = leftWristToNose < 0.3 && rightWristToNose < 0.3;
                 const isBothHandsRaised = leftArmRaised && rightArmRaised;
                 const isRightHandRaised = rightArmRaised && !leftArmRaised;
+                const isLeftHandRaised = leftArmRaised && !rightArmRaised;
                 
                 // 检测跳跃
                 let isJumping = false;
@@ -1305,11 +1306,11 @@
                 if (isHandsOnHead) {
                     return "双手抱头";
                 } else if (isBothHandsRaised) {
-                    return "双手上举";
+                    return "举起双手";
                 } else if (isRightHandRaised) {
-                    return "左手举起";
-                } else if (leftArmRaised) {
                     return "举起右手";
+                } else if (isLeftHandRaised) {
+                    return "举起左手";
                 } else if (isJumping) {
                     return "跳起来";
                 } else {
