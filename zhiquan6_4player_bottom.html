@@ -746,6 +746,9 @@
         let currentAction = "";
         let isUsingMockData = false;
         
+        // 跳跃判断方式开关：true 为基于上半身，false 为基于下半身（默认）
+        let useUpperBodyJumpDetection = true;
+        
         // 共用滑动图片状态
         let sharedSlidingImage = null;
         let isSlidingImageVisible = false;
@@ -1287,8 +1290,16 @@
                 const isRightHandRaised = rightArmRaised && !leftArmRaised;
                 
                 // 检测跳跃
-                const hipY = (leftHip.y + rightHip.y) / 2;
-                const isJumping = hipY < 0.4;
+                let isJumping = false;
+                if (useUpperBodyJumpDetection) {
+                    // 基于上半身的跳跃判断
+                    const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
+                    isJumping = upperBodyY < 0.35;
+                } else {
+                    // 基于下半身的跳跃判断（默认）
+                    const hipY = (leftHip.y + rightHip.y) / 2;
+                    isJumping = hipY < 0.4;
+                }
 
                 // 简单的动作检测逻辑
                 if (isHandsOnHead) {
