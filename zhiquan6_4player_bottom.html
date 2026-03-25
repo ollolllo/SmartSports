@@ -109,7 +109,8 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-end;
+            justify-content: flex-start;
+            padding-top: 10px;
         }
         
         .player-title {
@@ -130,32 +131,59 @@
         }
 
         .player-avatar {
-            width: 10%;
-            padding-bottom: 10%;
+            width: 25%;
+            padding-bottom: 25%;
             border-radius: 50%;
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
-            min-width: 30px;
+            min-width: 80px;
+            min-height: 80px;
+            margin-bottom: 5px;
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            font-family: 'Microsoft YaHei', sans-serif;
+            font-size: 24px;
+            margin-bottom: 10px;
             min-height: 30px;
         }
 
-        .score-display {
-            position: absolute;
-            top: 35px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 14px;
+        .player-name {
             font-weight: bold;
-            color: #ffd700;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 2px 10px;
-            border-radius: 10px;
-            z-index: 20;
+            color: #333;
+        }
+
+        /* 确保player-score样式优先级 */
+        .player-info .player-score {
+            font-weight: bold;
+            color: red !important;
+            font-family: 'Microsoft YaHei', sans-serif !important;
+            font-size: 24px !important;
+        }
+
+        /* 确保score-display样式优先级 */
+        .player-info #score-display-1,
+        .player-info #score-display-2,
+        .player-info #score-display-3,
+        .player-info #score-display-4 {
+            font-weight: bold;
+            color: red !important;
+            font-family: 'Microsoft YaHei', sans-serif !important;
+            font-size: 24px !important;
+        }
+
+        .score-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: red;
             white-space: nowrap;
             text-align: center;
-            min-width: 80px;
-            text-shadow: 0 0 5px rgba(255, 215, 0, 0.8);
+            font-family: 'Microsoft YaHei', sans-serif;
         }
 
         .score-change {
@@ -178,10 +206,6 @@
         }
 
         .action-display {
-            position: absolute;
-            top: 60px;
-            left: 50%;
-            transform: translateX(-50%);
             font-size: 12px;
             color: #333;
             background: rgba(255, 255, 255, 0.8);
@@ -190,6 +214,12 @@
             z-index: 20;
             white-space: nowrap;
             text-align: center;
+            margin-bottom: 10px;
+        }
+
+        /* 游戏开始时隐藏action-display */
+        .player-area.game-running .action-display {
+            display: none;
         }
 
         .game-area {
@@ -625,7 +655,7 @@
 </head>
 <body>
     <div class="game-container">
-        <h1 class="game-title">金元宝和石头 - 4人版</h1>
+        <!-- <h1 class="game-title">金元宝和石头 - 4人版</h1> -->
         
         <div class="camera-container">
             <video id="camera" autoplay playsinline></video>
@@ -644,8 +674,11 @@
         <div class="players-container">
             <!-- 玩家1 -->
             <div class="player-area">
-                <div class="player-title">玩家1</div>
-                <div class="score-display" id="score-display-1">积分: 0</div>
+                <div class="player-avatar" id="player-avatar-1"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家1</span>
+                    <span class="player-score" id="score-display-1">积分: 0</span>
+                </div>
                 <div class="action-display" id="action-display-1">未检测到人</div>
                 <div class="game-area" id="game-area-1">
                     <div class="character" id="character-1">
@@ -656,8 +689,11 @@
             
             <!-- 玩家2 -->
             <div class="player-area">
-                <div class="player-title">玩家2</div>
-                <div class="score-display" id="score-display-2">积分: 0</div>
+                <div class="player-avatar" id="player-avatar-2"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家2</span>
+                    <span class="player-score" id="score-display-2">积分: 0</span>
+                </div>
                 <div class="action-display" id="action-display-2">未检测到人</div>
                 <div class="game-area" id="game-area-2">
                     <div class="character" id="character-2">
@@ -668,8 +704,11 @@
             
             <!-- 玩家3 -->
             <div class="player-area">
-                <div class="player-title">玩家3</div>
-                <div class="score-display" id="score-display-3">积分: 0</div>
+                <div class="player-avatar" id="player-avatar-3"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家3</span>
+                    <span class="player-score" id="score-display-3">积分: 0</span>
+                </div>
                 <div class="action-display" id="action-display-3">未检测到人</div>
                 <div class="game-area" id="game-area-3">
                     <div class="character" id="character-3">
@@ -680,8 +719,11 @@
             
             <!-- 玩家4 -->
             <div class="player-area">
-                <div class="player-title">玩家4</div>
-                <div class="score-display" id="score-display-4">积分: 0</div>
+                <div class="player-avatar" id="player-avatar-4"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家4</span>
+                    <span class="player-score" id="score-display-4">积分: 0</span>
+                </div>
                 <div class="action-display" id="action-display-4">未检测到人</div>
                 <div class="game-area" id="game-area-4">
                     <div class="character" id="character-4">
@@ -1461,15 +1503,8 @@
             const avatarDataUrl = avatarCanvas.toDataURL('image/png');
 
             // 显示头像
-            const playerTitle = document.querySelector(`.player-area:nth-child(${playerIndex}) .player-title`);
-            if (playerTitle) {
-                // 检查是否已有头像
-                let avatarElement = playerTitle.querySelector('.player-avatar');
-                if (!avatarElement) {
-                    avatarElement = document.createElement('div');
-                    avatarElement.className = 'player-avatar';
-                    playerTitle.appendChild(avatarElement);
-                }
+            const avatarElement = document.getElementById(`player-avatar-${playerIndex}`);
+            if (avatarElement) {
                 avatarElement.style.backgroundImage = `url('${avatarDataUrl}')`;
             }
             
@@ -1485,6 +1520,9 @@
             const player = players.find(p => p.id === playerIndex);
             if (!player) return;
             
+            // 获取玩家区域元素
+            const playerArea = document.querySelector(`.player-area:nth-child(${playerIndex})`);
+            
             player.gameRunning = !player.gameRunning;
             
             if (player.gameRunning) {
@@ -1499,6 +1537,11 @@
                 }
                 spawnObjects(player);
                 
+                // 添加game-running类
+                if (playerArea) {
+                    playerArea.classList.add('game-running');
+                }
+                
                 // 拍摄玩家头像
                 capturePlayerAvatar(playerIndex);
             } else {
@@ -1509,6 +1552,11 @@
                     }
                 });
                 player.objects = [];
+                
+                // 移除game-running类
+                if (playerArea) {
+                    playerArea.classList.remove('game-running');
+                }
             }
         }
         
