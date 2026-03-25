@@ -11,7 +11,7 @@ dirs_to_process = [
 # 定义白色阈值（接近白色的像素将被设为透明）
 WHITE_THRESHOLD = 240
 
-def convert_to_transparent(input_path, output_path, target_size=(100, 100)):
+def convert_to_transparent(input_path, output_path, target_size=(200, 200)):
     """将图片转换为透明背景并调整尺寸
 
     Args:
@@ -75,6 +75,9 @@ def convert_image_to_base64(image_path, output_path):
 #     else:
 #         print(f"目录不存在: {directory}")
  
-# convert_to_transparent("D:\\projects\\AI自习室\\SmartSports\\imgs\\st.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\10.png")
-# convert_image_to_base64("D:\\projects\\AI自习室\\SmartSports\\imgs\\8.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\8.txt")
-convert_image_to_base64("D:\\projects\\AI自习室\\SmartSports\\imgs\\10.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\10.txt")
+convert_to_transparent("D:\\projects\\AI自习室\\SmartSports\\imgs\\bt.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\bts.png")
+convert_image_to_base64("D:\\projects\\AI自习室\\SmartSports\\imgs\\bts.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\bts.txt")
+# convert_to_transparent("D:\\projects\\AI自习室\\SmartSports\\imgs\\f.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\fs.png")
+# convert_image_to_base64("D:\\projects\\AI自习室\\SmartSports\\imgs\\fs.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\fs.txt")
+# convert_to_transparent("D:\\projects\\AI自习室\\SmartSports\\imgs\\j.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\js.png")
+# convert_image_to_base64("D:\\projects\\AI自习室\\SmartSports\\imgs\\js.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\js.txt")
