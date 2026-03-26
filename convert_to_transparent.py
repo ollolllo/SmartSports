@@ -75,8 +75,8 @@ def convert_image_to_base64(image_path, output_path):
 #     else:
 #         print(f"目录不存在: {directory}")
  
-convert_to_transparent("D:\\projects\\AI自习室\\SmartSports\\imgs\\bt.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\bts.png")
-convert_image_to_base64("D:\\projects\\AI自习室\\SmartSports\\imgs\\bts.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\bts.txt")
+convert_to_transparent("D:\\projects\\AI自习室\\SmartSports\\imgs\\cs.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\css.png")
+convert_image_to_base64("D:\\projects\\AI自习室\\SmartSports\\imgs\\css.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\css.txt")
 # convert_to_transparent("D:\\projects\\AI自习室\\SmartSports\\imgs\\f.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\fs.png")
 # convert_image_to_base64("D:\\projects\\AI自习室\\SmartSports\\imgs\\fs.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\fs.txt")
 # convert_to_transparent("D:\\projects\\AI自习室\\SmartSports\\imgs\\j.png", "D:\\projects\\AI自习室\\SmartSports\\imgs\\js.png")
