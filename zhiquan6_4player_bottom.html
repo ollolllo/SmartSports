@@ -1198,7 +1198,13 @@
                     // 显示动作到对应的玩家区域
                     const actionDisplay = document.getElementById(`action-display-${playerIndex}`);
                     if (actionDisplay) {
-                        actionDisplay.textContent = action;
+                        // 如果游戏未运行，显示"举起右手开始"
+                        if (!player.gameRunning) {
+                            actionDisplay.textContent = "举起右手开始";
+                        } else {
+                            // 游戏运行中，显示实际动作
+                            actionDisplay.textContent = action;
+                        }
                     }
                     
                     // 根据动作更新表情，只有当没有碰撞表情切换时才更新
