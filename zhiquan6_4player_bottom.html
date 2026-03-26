@@ -1293,13 +1293,13 @@
                 // 检测跳跃
                 let isJumping = false;
                 if (useUpperBodyJumpDetection) {
-                    // 基于上半身的跳跃判断
+                    // 基于上半身的跳跃判断 - 降低阈值以减少误判
                     const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
-                    isJumping = upperBodyY < 0.35;
+                    isJumping = upperBodyY < 0.25;
                 } else {
                     // 基于下半身的跳跃判断（默认）
                     const hipY = (leftHip.y + rightHip.y) / 2;
-                    isJumping = hipY < 0.4;
+                    isJumping = hipY < 0.3;
                 }
 
                 // 简单的动作检测逻辑
