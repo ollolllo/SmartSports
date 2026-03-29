@@ -258,6 +258,8 @@
         let useUpperBodyJumpDetection = true;
         let lastHandsOpenTime = 0;
         const HANDS_OPEN_COOLDOWN = 1000;
+        let lastArmExtendedTime = 0;
+        const ARM_EXTENDED_COOLDOWN = 500;
 
         const COLORS = [
             '#FF0D72',
@@ -791,11 +793,19 @@
                     break;
                 case "伸开右手":
                 case "举起右手":
+                    if (now - lastArmExtendedTime < ARM_EXTENDED_COOLDOWN) {
+                        return;
+                    }
+                    lastArmExtendedTime = now;
                     lastActionTime = now;
                     moveRight();
                     break;
                 case "伸开左手":
                 case "举起左手":
+                    if (now - lastArmExtendedTime < ARM_EXTENDED_COOLDOWN) {
+                        return;
+                    }
+                    lastArmExtendedTime = now;
                     lastActionTime = now;
                     moveLeft();
                     break;
