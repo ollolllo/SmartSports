@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>俄罗斯方块</title>
+    <script src="mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="mediapipe/pose.js" crossorigin="anonymous"></script>
     <style>
         * {
             margin: 0;
@@ -169,6 +171,14 @@
         <h1>俄罗斯方块</h1>
         
         <div class="game-wrapper">
+
+
+                    <div style="margin-top: 20px; text-align: center;">
+            <video id="webcam" width="320" height="240" style="display: none;"></video>
+            <canvas id="webcamCanvas" width="320" height="240" style="border: 2px solid #fff; border-radius: 5px; transform: scaleX(-1);"></canvas>
+            <p id="actionDisplay" style="margin-top: 10px; font-size: 1.2em;">举起右手开始游戏</p>
+        </div>
+
             <div class="game-board">
                 <canvas id="gameCanvas" width="300" height="600"></canvas>
             </div>
@@ -201,9 +211,17 @@
                     <p>↑ : 旋转方块</p>
                     <p>↓ : 加速下落</p>
                     <p>空格 : 直接落下</p>
+                    <p style="margin-top: 10px; color: #ffd700;">--- 姿态控制 ---</p>
+                    <p>举起右手 : 开始游戏</p>
+                    <p>跳起来 : 旋转方块</p>
+                    <p>伸开右手 : 向右移动</p>
+                    <p>伸开左手 : 向左移动</p>
+                    <p>张开双手 : 直接落下</p>
                 </div>
             </div>
         </div>
+        
+
     </div>
     
     <div id="gameOver" class="game-over">
@@ -232,6 +250,12 @@
         let nextPiece = null;
         let dropInterval = null;
         let dropSpeed = 1000;
+        
+        let pose = null;
+        let webcamReady = false;
+        let lastActionTime = 0;
+        const ACTION_COOLDOWN = 300;
+        let useUpperBodyJumpDetection = true;
 
         const COLORS = [
             '#FF0D72',
@@ -552,6 +576,210 @@
 
         initBoard();
         drawBoard();
+        
+        async function initPose() {
+            const videoElement = document.getElementById('webcam');
+            const canvasElement = document.getElementById('webcamCanvas');
+            const canvasCtx = canvasElement.getContext('2d');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 320, height: 240 } 
+                });
+                videoElement.srcObject = stream;
+                await videoElement.play();
+                
+                webcamReady = true;
+                console.log('摄像头已就绪');
+                
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                console.log('是否为移动端:', isMobile);
+                
+                pose = new Pose({
+                    locateFile: (file) => {
+                        console.log('加载文件:', file);
+                        return `mediapipe/${file}`;
+                    }
+                });
+                
+                pose.setOptions({
+                    modelComplexity: isMobile ? 0 : 1,
+                    smoothLandmarks: true,
+                    enableSegmentation: false,
+                    smoothSegmentation: false,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5,
+                    selfieMode: false
+                });
+                
+                pose.onResults((results) => {
+                    canvasCtx.save();
+                    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                    
+                    if (results.poseLandmarks) {
+                        drawPoseLandmarks(canvasCtx, results.poseLandmarks);
+                        handlePoseAction(results.poseLandmarks);
+                    }
+                    
+                    canvasCtx.restore();
+                });
+                
+                await pose.initialize();
+                console.log('MediaPipe Pose初始化成功');
+                
+                async function processFrame() {
+                    if (webcamReady && videoElement.readyState >= 2) {
+                        await pose.send({ image: videoElement });
+                    }
+                    requestAnimationFrame(processFrame);
+                }
+                processFrame();
+                
+            } catch (error) {
+                console.error('摄像头初始化失败:', error);
+                document.getElementById('actionDisplay').textContent = '摄像头初始化失败: ' + error.message;
+            }
+        }
+        
+        function drawPoseLandmarks(ctx, landmarks) {
+            ctx.fillStyle = '#00FF00';
+            ctx.strokeStyle = '#FF0000';
+            ctx.lineWidth = 2;
+            
+            const connections = [
+                [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
+                [11, 23], [12, 24], [23, 24], [23, 25], [25, 27],
+                [24, 26], [26, 28]
+            ];
+            
+            connections.forEach(([i, j]) => {
+                if (landmarks[i] && landmarks[j]) {
+                    ctx.beginPath();
+                    ctx.moveTo(landmarks[i].x * 320, landmarks[i].y * 240);
+                    ctx.lineTo(landmarks[j].x * 320, landmarks[j].y * 240);
+                    ctx.stroke();
+                }
+            });
+            
+            landmarks.forEach((landmark, index) => {
+                if (landmark) {
+                    ctx.beginPath();
+                    ctx.arc(landmark.x * 320, landmark.y * 240, 3, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            });
+        }
+        
+        function recognizeAction(landmarks) {
+            const requiredLandmarks = [0, 11, 12, 15, 16, 23, 24];
+            const hasRequiredLandmarks = requiredLandmarks.every(idx => landmarks[idx]);
+            
+            if (!hasRequiredLandmarks) {
+                return "未检测到完整姿态";
+            }
+            
+            const leftShoulder = landmarks[11];
+            const rightShoulder = landmarks[12];
+            const leftWrist = landmarks[15];
+            const rightWrist = landmarks[16];
+            const nose = landmarks[0];
+            const leftHip = landmarks[23];
+            const rightHip = landmarks[24];
+            
+            const calculateDistance = (point1, point2) => {
+                return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y - point2.y, 2));
+            };
+            
+            const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+            const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+            
+            const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
+            const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+            
+            const isBothHandsRaised = leftArmRaised && rightArmRaised;
+            const isRightHandRaised = rightArmRaised && !leftArmRaised;
+            const isLeftHandRaised = leftArmRaised && !rightArmRaised;
+            
+            // 检测张开双手动作：手臂与肩膀大致水平
+            const isArmsHorizontal = Math.abs(leftWrist.y - leftShoulder.y) < shoulderWidth * 0.9 && 
+                                    Math.abs(rightWrist.y - rightShoulder.y) < shoulderWidth * 0.9;
+            const isHandsOpen = isArmsHorizontal;
+            
+            // 检测跳跃
+            let isJumping = false;
+            if (useUpperBodyJumpDetection) {
+                // 基于上半身的跳跃判断 - 降低阈值以减少误判
+                const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
+                isJumping = upperBodyY < 0.25;
+            } else {
+                // 基于下半身的跳跃判断（默认）
+                const hipY = (leftHip.y + rightHip.y) / 2;
+                isJumping = hipY < 0.3;
+            }
+            
+            if (isHandsOpen) {
+                return "张开双手";
+            } else if (isBothHandsRaised) {
+                return "举起双手";
+            } else if (isRightHandRaised) {
+                return "举起右手";
+            } else if (isLeftHandRaised) {
+                return "举起左手";
+            } else if (isJumping) {
+                return "跳起来";
+            } else {
+                return "站立";
+            }
+        }
+        
+        function handlePoseAction(landmarks) {
+            const action = recognizeAction(landmarks);
+            const actionDisplay = document.getElementById('actionDisplay');
+            
+            if (!gameRunning) {
+                actionDisplay.textContent = "举起右手开始游戏";
+            } else {
+                actionDisplay.textContent = "当前动作: " + action;
+            }
+            
+            const now = Date.now();
+            if (now - lastActionTime < ACTION_COOLDOWN) {
+                return;
+            }
+            
+            if (action === "举起右手" && !gameRunning) {
+                lastActionTime = now;
+                startGame();
+                return;
+            }
+            
+            if (!gameRunning || gamePaused) return;
+            
+            switch(action) {
+                case "跳起来":
+                    lastActionTime = now;
+                    rotatePiece();
+                    break;
+                case "伸开右手":
+                case "举起右手":
+                    lastActionTime = now;
+                    moveRight();
+                    break;
+                case "伸开左手":
+                case "举起左手":
+                    lastActionTime = now;
+                    moveLeft();
+                    break;
+                case "张开双手":
+                case "举起双手":
+                    lastActionTime = now;
+                    hardDrop();
+                    break;
+            }
+        }
+        
+        initPose();
     </script>
 </body>
 </html>
