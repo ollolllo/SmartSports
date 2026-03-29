@@ -256,6 +256,8 @@
         let lastActionTime = 0;
         const ACTION_COOLDOWN = 300;
         let useUpperBodyJumpDetection = true;
+        let lastHandsOpenTime = 0;
+        const HANDS_OPEN_COOLDOWN = 1000;
 
         const COLORS = [
             '#FF0D72',
@@ -694,12 +696,21 @@
             const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
             const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
             
-            const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
-            const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+            // 优化：更严格的手臂举起判断
+            const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold * 1.5;
+            const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold * 1.5;
             
             const isBothHandsRaised = leftArmRaised && rightArmRaised;
             const isRightHandRaised = rightArmRaised && !leftArmRaised;
             const isLeftHandRaised = leftArmRaised && !rightArmRaised;
+            
+            // 优化：伸开手臂判断 - 手腕与肩膀Y坐标接近（水平）
+            const isRightArmExtended = Math.abs(rightWrist.y - rightShoulder.y) < shoulderWidth * 0.4 &&
+                                       Math.abs(rightWrist.x - rightShoulder.x) > shoulderWidth * 0.5 &&
+                                       !rightArmRaised;
+            const isLeftArmExtended = Math.abs(leftWrist.y - leftShoulder.y) < shoulderWidth * 0.4 &&
+                                      Math.abs(leftWrist.x - leftShoulder.x) > shoulderWidth * 0.5 &&
+                                      !leftArmRaised;
             
             // 检测张开双手动作：手臂与肩膀大致水平
             const isArmsHorizontal = Math.abs(leftWrist.y - leftShoulder.y) < shoulderWidth * 0.9 && 
@@ -726,6 +737,10 @@
                 return "举起右手";
             } else if (isLeftHandRaised) {
                 return "举起左手";
+            } else if (isRightArmExtended) {
+                return "伸开右手";
+            } else if (isLeftArmExtended) {
+                return "伸开左手";
             } else if (isJumping) {
                 return "跳起来";
             } else {
@@ -744,9 +759,6 @@
             }
             
             const now = Date.now();
-            if (now - lastActionTime < ACTION_COOLDOWN) {
-                return;
-            }
             
             if (action === "举起右手" && !gameRunning) {
                 lastActionTime = now;
@@ -755,6 +767,22 @@
             }
             
             if (!gameRunning || gamePaused) return;
+            
+            // 张开双手需要1秒冷却时间
+            if (action === "张开双手" || action === "举起双手") {
+                if (now - lastHandsOpenTime < HANDS_OPEN_COOLDOWN) {
+                    return;
+                }
+                lastHandsOpenTime = now;
+                lastActionTime = now;
+                hardDrop();
+                return;
+            }
+            
+            // 其他动作使用普通冷却时间
+            if (now - lastActionTime < ACTION_COOLDOWN) {
+                return;
+            }
             
             switch(action) {
                 case "跳起来":
@@ -770,11 +798,6 @@
                 case "举起左手":
                     lastActionTime = now;
                     moveLeft();
-                    break;
-                case "张开双手":
-                case "举起双手":
-                    lastActionTime = now;
-                    hardDrop();
                     break;
             }
         }
