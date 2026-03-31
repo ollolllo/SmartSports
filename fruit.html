@@ -96,7 +96,6 @@
         #webcamCanvas {
             border: 2px solid #fff;
             border-radius: 5px;
-            transform: scaleX(-1);
         }
 
         #actionDisplay {
@@ -211,7 +210,6 @@
                 </div>
                 
                 <div class="webcam-container">
-                    <video id="webcam" width="320" height="240"></video>
                     <canvas id="webcamCanvas" width="320" height="240"></canvas>
                     <p id="actionDisplay">举起右手开始游戏</p>
                 </div>
@@ -260,8 +258,10 @@
         let lastHandPosition = null;
         let handVelocity = { x: 0, y: 0 };
         let lastHandTime = 0;
-        let useTwoHands = false;
         let lastTwoHandsTime = 0;
+        let currentHandPosition = null;
+        let currentHandUp = false;
+        let currentTwoHandsUp = false;
 
         const FRUIT_TYPES = [
             { name: 'apple', emoji: '🍎', color: '#ff4444', points: 10, size: 35 },
@@ -385,11 +385,11 @@
             if (bladeTrail.length < 2) return;
             
             ctx.save();
-            ctx.strokeStyle = useTwoHands ? '#ff00ff' : '#ffffff';
+            ctx.strokeStyle = currentTwoHandsUp ? '#ff00ff' : '#ffffff';
             ctx.lineWidth = 4;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            ctx.shadowColor = useTwoHands ? '#ff00ff' : '#ffffff';
+            ctx.shadowColor = currentTwoHandsUp ? '#ff00ff' : '#ffffff';
             ctx.shadowBlur = 20;
             
             ctx.beginPath();
@@ -408,10 +408,10 @@
             
             for (let i = fruits.length - 1; i >= 0; i--) {
                 const fruit = fruits[i];
-                if (!fruit.sliced && fruit.containsPoint(gameX, gameY) && fruit.isInFruitArea(gameX)) {
+                if (!fruit.sliced && fruit.containsPoint(gameX, gameY)) {
                     fruit.sliced = true;
                     
-                    const points = useTwoHands ? fruit.type.points * 2 : fruit.type.points;
+                    const points = currentTwoHandsUp ? fruit.type.points * 2 : fruit.type.points;
                     score += points;
                     combo++;
                     
@@ -434,47 +434,35 @@
         }
 
         function checkHandSlice() {
-            if (!gameRunning || !pose || !pose.results) return;
-            
-            const landmarks = pose.results.poseLandmarks;
-            if (!landmarks) return;
-            
-            const rightWrist = landmarks[16];
-            const leftWrist = landmarks[15];
-            const rightShoulder = landmarks[12];
-            const leftShoulder = landmarks[11];
+            if (!gameRunning) return;
+            if (!currentHandUp || !currentHandPosition) {
+                lastHandPosition = null;
+                return;
+            }
             
             const now = Date.now();
-            const rightHandUp = rightWrist.y < rightShoulder.y;
-            const leftHandUp = leftWrist.y < leftShoulder.y;
+            const useTwoHands = currentTwoHandsUp;
             
-            useTwoHands = rightHandUp && leftHandUp && (now - lastTwoHandsTime > 2000);
+            const handX = currentHandPosition.x;
+            const handY = currentHandPosition.y;
             
-            if (rightHandUp || leftHandUp) {
-                const wrist = rightHandUp ? rightWrist : leftWrist;
-                const handX = (1 - wrist.x) * GAME_WIDTH;
-                const handY = wrist.y * GAME_HEIGHT;
-                
-                if (lastHandPosition) {
-                    const dt = now - lastHandTime;
-                    if (dt > 0) {
-                        const dx = handX - lastHandPosition.x;
-                        const dy = handY - lastHandPosition.y;
-                        const speed = Math.sqrt(dx * dx + dy * dy) / dt * 1000;
-                        
-                        if (speed > 100) {
-                            if (sliceFruit(handX, handY)) {
-                                bladeTrail.push(new BladePoint(handX, handY));
-                            }
+            if (lastHandPosition) {
+                const dt = now - lastHandTime;
+                if (dt > 0) {
+                    const dx = handX - lastHandPosition.x;
+                    const dy = handY - lastHandPosition.y;
+                    const speed = Math.sqrt(dx * dx + dy * dy) / dt * 1000;
+                    
+                    if (speed > 50) {
+                        if (sliceFruit(handX, handY)) {
+                            bladeTrail.push(new BladePoint(handX, handY));
                         }
                     }
                 }
-                
-                lastHandPosition = { x: handX, y: handY };
-                lastHandTime = now;
-            } else {
-                lastHandPosition = null;
             }
+            
+            lastHandPosition = { x: handX, y: handY };
+            lastHandTime = now;
         }
 
         function showCombo() {
@@ -597,7 +585,12 @@
         }
 
         async function initCamera() {
-            const videoElement = document.getElementById('webcam');
+            const videoElement = document.createElement('video');
+            videoElement.width = 320;
+            videoElement.height = 240;
+            videoElement.style.display = 'none';
+            document.body.appendChild(videoElement);
+            
             const webcamCanvas = document.getElementById('webcamCanvas');
             const actionDisplay = document.getElementById('actionDisplay');
             
@@ -640,7 +633,6 @@
                 console.log('视频播放成功');
                 actionDisplay.textContent = '摄像头已就绪';
                 
-                videoElement.style.display = 'block';
                 webcamCanvas.style.display = 'block';
                 
                 initPose(videoElement);
@@ -667,15 +659,49 @@
             });
             
             pose.onResults((results) => {
-                if (!results.poseLandmarks) return;
+                const webcamCanvas = document.getElementById('webcamCanvas');
+                const webcamCtx = webcamCanvas.getContext('2d');
+                
+                webcamCtx.save();
+                webcamCtx.setTransform(-1, 0, 0, 1, webcamCanvas.width, 0);
+                webcamCtx.drawImage(results.image, 0, 0, webcamCanvas.width, webcamCanvas.height);
+                webcamCtx.restore();
+                
+                if (!results.poseLandmarks) {
+                    currentHandUp = false;
+                    currentTwoHandsUp = false;
+                    currentHandPosition = null;
+                    return;
+                }
+                
+                const mirrorX = (x) => 1 - x;
                 
                 const rightWrist = results.poseLandmarks[16];
                 const leftWrist = results.poseLandmarks[15];
                 const rightShoulder = results.poseLandmarks[12];
                 const leftShoulder = results.poseLandmarks[11];
                 
-                const rightHandUp = rightWrist.y < rightShoulder.y;
-                const leftHandUp = leftWrist.y < leftShoulder.y;
+                const rightWristMirrored = { x: mirrorX(rightWrist.x), y: rightWrist.y };
+                const leftWristMirrored = { x: mirrorX(leftWrist.x), y: leftWrist.y };
+                const rightShoulderMirrored = { x: mirrorX(rightShoulder.x), y: rightShoulder.y };
+                const leftShoulderMirrored = { x: mirrorX(leftShoulder.x), y: leftShoulder.y };
+                
+                const rightHandUp = rightWristMirrored.y < rightShoulderMirrored.y;
+                const leftHandUp = leftWristMirrored.y < leftShoulderMirrored.y;
+                
+                const now = Date.now();
+                currentTwoHandsUp = rightHandUp && leftHandUp && (now - lastTwoHandsTime > 2000);
+                currentHandUp = rightHandUp || leftHandUp;
+                
+                if (currentHandUp) {
+                    const wrist = rightHandUp ? rightWristMirrored : leftWristMirrored;
+                    currentHandPosition = {
+                        x: wrist.x * GAME_WIDTH,
+                        y: wrist.y * GAME_HEIGHT
+                    };
+                } else {
+                    currentHandPosition = null;
+                }
                 
                 const actionDisplay = document.getElementById('actionDisplay');
                 
