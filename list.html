@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧体育 - 青蛙跳小游戏</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px 20px;
+        }
+        .game-list {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .game-list h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 28px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .game-list ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .game-list li {
+            margin-bottom: 15px;
+        }
+        .game-list a {
+            display: block;
+            background: white;
+            color: #333;
+            text-decoration: none;
+            padding: 18px 25px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .game-list a:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .game-list a::before {
+            content: '▶';
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 12px;
+            opacity: 0.5;
+            transition: all 0.3s ease;
+        }
+        .game-list a:hover::before {
+            opacity: 1;
+            left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-list">
+        <h1>🎮 游戏选择</h1>
+        <ul>
+            <li><a href="https://192.168.13.135/duobao.html">4人玩家，MediaPipe 从 CDN 加载</a></li>
+            <li><a href="https://192.168.13.135/duobao2.html">4人玩家，MediaPipe 从本地加载</a></li>
+            <li><a href="https://192.168.13.135/duobao3.html">4人玩家，区域划分模式（摄像头距离：2-3米；适合80-100cm间距）</a></li>
+            <li><a href="https://192.168.13.135/duobao4.html">4人玩家，720P广角模式（摄像头距离：4-5米；摄像头视场角：90°广角）</a></li>
+            <li><a href="https://192.168.13.135/tetris.html">俄罗斯方块</a></li>
+            <li><a href="https://192.168.13.135/mtetris.html">手机版俄罗斯方块</a></li>
+            <li><a href="https://192.168.13.135/fruit.html">水果忍者</a></li>
+        </ul>
+    </div>
+</body>
+</html>

@@ -1095,10 +1095,12 @@
                     console.log('正在请求摄像头权限');
                     let stream;
                     try {
+                        // 方案2：使用720P高清分辨率，支持更宽视野
+                        // 适合4人站80-100cm间隔，总宽度约3.2-4米
                         stream = await navigator.mediaDevices.getUserMedia({
                             video: {
-                                width: { ideal: 640 },
-                                height: { ideal: 480 }
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
                             },
                             audio: false
                         });

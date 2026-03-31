@@ -1242,7 +1242,9 @@
 
             processMultiplePoses(poses) {
                 // 根据X坐标确定区域，每个区域固定对应一个玩家
-                // 区域划分：0.0-0.25→玩家1, 0.25-0.5→玩家2, 0.5-0.75→玩家3, 0.75-1.0→玩家4
+                // 区域划分（扩大间隔，适应80-100cm间距）：
+                // 0.0-0.2→玩家1, 0.2-0.4→玩家2, 0.4-0.6→玩家3, 0.6-0.8→玩家4
+                // 左右各留20%空白区域
                 const detectedPlayers = {1: null, 2: null, 3: null, 4: null};
                 
                 poses.forEach(pose => {
@@ -1251,17 +1253,18 @@
                     const noseX = pose[0].x;
                     let playerIndex;
                     
-                    if (noseX < 0.25) {
+                    if (noseX < 0.2) {
                         playerIndex = 1;
-                    } else if (noseX < 0.5) {
+                    } else if (noseX < 0.4) {
                         playerIndex = 2;
-                    } else if (noseX < 0.75) {
+                    } else if (noseX < 0.6) {
                         playerIndex = 3;
-                    } else {
+                    } else if (noseX < 0.8) {
                         playerIndex = 4;
                     }
+                    // 如果 x >= 0.8，不分配给任何玩家（右侧留空区域）
                     
-                    if (!detectedPlayers[playerIndex]) {
+                    if (playerIndex && !detectedPlayers[playerIndex]) {
                         detectedPlayers[playerIndex] = pose;
                     }
                 });

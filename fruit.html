@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水果忍者</title>
+    <script src="mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="mediapipe/pose.js" crossorigin="anonymous"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 10px;
+        }
+
+        .game-wrapper {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .game-area {
+            position: relative;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(to bottom, #0a0a1a 0%, #1a1a3a 100%);
+            border: 3px solid #ffd700;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+
+        .info-panel {
+            background: rgba(0,0,0,0.7);
+            border: 3px solid #ffd700;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 200px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .info-panel h2 {
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #ffd700;
+        }
+
+        .score-display {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 8px;
+        }
+
+        .score-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #ffd700;
+            float: right;
+        }
+
+        .webcam-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        #webcam {
+            display: none;
+        }
+
+        #webcamCanvas {
+            border: 2px solid #fff;
+            border-radius: 5px;
+            transform: scaleX(-1);
+        }
+
+        #actionDisplay {
+            margin-top: 10px;
+            font-size: 1.2em;
+            color: #ffd700;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            font-size: 0.9em;
+            text-align: center;
+            opacity: 0.9;
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ffd700 100%);
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            font-size: 1.1em;
+            border-radius: 25px;
+            cursor: pointer;
+            margin: 5px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.5);
+        }
+
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .game-over.show {
+            display: flex;
+        }
+
+        .game-over h2 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #ff6b6b;
+        }
+
+        .game-over p {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+
+        .combo-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3em;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .combo-display.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 768px) {
+            .game-wrapper {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🍎 水果忍者 🍊</h1>
+        
+        <div class="game-wrapper">
+            <div class="game-area">
+                <canvas id="gameCanvas" width="400" height="600"></canvas>
+                <div id="comboDisplay" class="combo-display"></div>
+            </div>
+            
+            <div class="info-panel">
+                <h2>游戏信息</h2>
+                <div class="score-display">
+                    分数: <span id="score" class="score-value">0</span>
+                </div>
+                <div class="score-display">
+                    连击: <span id="combo" class="score-value">0</span>
+                </div>
+                <div class="score-display">
+                    生命: <span id="lives" class="score-value">3</span>
+                </div>
+                
+                <div class="webcam-container">
+                    <video id="webcam" width="320" height="240"></video>
+                    <canvas id="webcamCanvas" width="320" height="240"></canvas>
+                    <p id="actionDisplay">举起右手开始游戏</p>
+                </div>
+                
+                <div class="instructions">
+                    <p>🎮 手势控制</p>
+                    <p>------------------------</p>
+                    <p>举起右手 : 开始游戏</p>
+                    <p>挥动手臂 : 切水果</p>
+                    <p>双手挥动 : 双倍得分</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="gameOver" class="game-over">
+        <h2>游戏结束</h2>
+        <p>最终分数: <span id="finalScore">0</span></p>
+        <button class="btn" onclick="startGame()">再玩一次</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const GAME_WIDTH = canvas.width;
+        const GAME_HEIGHT = canvas.height;
+        const FRUIT_AREA_WIDTH = GAME_WIDTH;
+        const FRUIT_AREA_LEFT = 0;
+        const FRUIT_AREA_RIGHT = GAME_WIDTH;
+        
+        let fruits = [];
+        let particles = [];
+        let bladeTrail = [];
+        let score = 0;
+        let combo = 0;
+        let comboTimer = null;
+        let lives = 3;
+        let gameRunning = false;
+        let gameStarted = false;
+        let lastSpawnTime = 0;
+        let spawnInterval = 1500;
+        let difficulty = 1;
+        
+        let pose = null;
+        let lastHandPosition = null;
+        let handVelocity = { x: 0, y: 0 };
+        let lastHandTime = 0;
+        let useTwoHands = false;
+        let lastTwoHandsTime = 0;
+
+        const FRUIT_TYPES = [
+            { name: 'apple', emoji: '🍎', color: '#ff4444', points: 10, size: 35 },
+            { name: 'orange', emoji: '🍊', color: '#ff8800', points: 10, size: 35 },
+            { name: 'watermelon', emoji: '🍉', color: '#44ff44', points: 15, size: 40 },
+            { name: 'grape', emoji: '🍇', color: '#8844ff', points: 20, size: 30 },
+            { name: 'banana', emoji: '🍌', color: '#ffff44', points: 10, size: 35 },
+            { name: 'strawberry', emoji: '🍓', color: '#ff4466', points: 15, size: 28 },
+            { name: 'pineapple', emoji: '🍍', color: '#ffff00', points: 25, size: 45 }
+        ];
+
+        const ACTION_COOLDOWN = 300;
+        let lastActionTime = 0;
+
+        class Fruit {
+            constructor() {
+                this.type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+                this.x = FRUIT_AREA_LEFT + Math.random() * (FRUIT_AREA_WIDTH - this.type.size);
+                this.y = -this.type.size;
+                this.vy = 2 + Math.random() * 2 * difficulty;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+                this.sliced = false;
+                this.sliceAngle = 0;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.x += this.vx;
+                this.rotation += this.rotationSpeed;
+                
+                if (this.x < 0) this.x = 0;
+                if (this.x > GAME_WIDTH - this.type.size) this.x = GAME_WIDTH - this.type.size;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.type.size / 2, this.y + this.type.size / 2);
+                ctx.rotate(this.rotation);
+                
+                ctx.font = `${this.type.size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.type.emoji, 0, 0);
+                
+                ctx.restore();
+
+                if (this.sliced) {
+                    ctx.save();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x - 20, this.y - 20);
+                    ctx.lineTo(this.x + 20, this.y + 20);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            isInFruitArea(x) {
+                return x >= FRUIT_AREA_LEFT && x <= FRUIT_AREA_RIGHT;
+            }
+
+            containsPoint(x, y) {
+                const centerX = this.x + this.type.size / 2;
+                const centerY = this.y + this.type.size / 2;
+                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                return distance < this.type.size / 2 + 20;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 15;
+                this.vy = (Math.random() - 0.5) * 15 - 5;
+                this.color = color;
+                this.life = 1;
+                this.decay = 0.02 + Math.random() * 0.02;
+                this.size = 5 + Math.random() * 10;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.3;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class BladePoint {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.time = Date.now();
+            }
+        }
+
+        function drawFruitArea() {
+            // 水果区域占满整个游戏区域，无需绘制边界
+        }
+
+        function drawBladeTrail() {
+            if (bladeTrail.length < 2) return;
+            
+            const now = Date.now();
+            bladeTrail = bladeTrail.filter(p => now - p.time < 150);
+            
+            if (bladeTrail.length < 2) return;
+            
+            ctx.save();
+            ctx.strokeStyle = useTwoHands ? '#ff00ff' : '#ffffff';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowColor = useTwoHands ? '#ff00ff' : '#ffffff';
+            ctx.shadowBlur = 20;
+            
+            ctx.beginPath();
+            ctx.moveTo(bladeTrail[0].x, bladeTrail[0].y);
+            
+            for (let i = 1; i < bladeTrail.length; i++) {
+                ctx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function sliceFruit(handX, handY) {
+            const gameX = handX;
+            const gameY = handY;
+            
+            for (let i = fruits.length - 1; i >= 0; i--) {
+                const fruit = fruits[i];
+                if (!fruit.sliced && fruit.containsPoint(gameX, gameY) && fruit.isInFruitArea(gameX)) {
+                    fruit.sliced = true;
+                    
+                    const points = useTwoHands ? fruit.type.points * 2 : fruit.type.points;
+                    score += points;
+                    combo++;
+                    
+                    updateScoreDisplay();
+                    showCombo();
+                    
+                    for (let j = 0; j < 15; j++) {
+                        particles.push(new Particle(
+                            fruit.x + fruit.type.size / 2,
+                            fruit.y + fruit.type.size / 2,
+                            fruit.type.color
+                        ));
+                    }
+                    
+                    fruits.splice(i, 1);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function checkHandSlice() {
+            if (!gameRunning || !pose || !pose.results) return;
+            
+            const landmarks = pose.results.poseLandmarks;
+            if (!landmarks) return;
+            
+            const rightWrist = landmarks[16];
+            const leftWrist = landmarks[15];
+            const rightShoulder = landmarks[12];
+            const leftShoulder = landmarks[11];
+            
+            const now = Date.now();
+            const rightHandUp = rightWrist.y < rightShoulder.y;
+            const leftHandUp = leftWrist.y < leftShoulder.y;
+            
+            useTwoHands = rightHandUp && leftHandUp && (now - lastTwoHandsTime > 2000);
+            
+            if (rightHandUp || leftHandUp) {
+                const wrist = rightHandUp ? rightWrist : leftWrist;
+                const handX = (1 - wrist.x) * GAME_WIDTH;
+                const handY = wrist.y * GAME_HEIGHT;
+                
+                if (lastHandPosition) {
+                    const dt = now - lastHandTime;
+                    if (dt > 0) {
+                        const dx = handX - lastHandPosition.x;
+                        const dy = handY - lastHandPosition.y;
+                        const speed = Math.sqrt(dx * dx + dy * dy) / dt * 1000;
+                        
+                        if (speed > 100) {
+                            if (sliceFruit(handX, handY)) {
+                                bladeTrail.push(new BladePoint(handX, handY));
+                            }
+                        }
+                    }
+                }
+                
+                lastHandPosition = { x: handX, y: handY };
+                lastHandTime = now;
+            } else {
+                lastHandPosition = null;
+            }
+        }
+
+        function showCombo() {
+            if (combo > 1) {
+                const comboDisplay = document.getElementById('comboDisplay');
+                comboDisplay.textContent = `${combo} 连击!`;
+                comboDisplay.classList.add('show');
+                
+                clearTimeout(comboTimer);
+                comboTimer = setTimeout(() => {
+                    comboDisplay.classList.remove('show');
+                }, 800);
+            }
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('combo').textContent = combo;
+        }
+
+        function updateLivesDisplay() {
+            document.getElementById('lives').textContent = lives;
+        }
+
+        function spawnFruit() {
+            const now = Date.now();
+            if (now - lastSpawnTime > spawnInterval) {
+                fruits.push(new Fruit());
+                lastSpawnTime = now;
+                
+                if (Math.random() < 0.3 * difficulty) {
+                    setTimeout(() => {
+                        if (gameRunning) fruits.push(new Fruit());
+                    }, spawnInterval / 3);
+                }
+            }
+        }
+
+        function checkMissedFruit() {
+            for (let i = fruits.length - 1; i >= 0; i--) {
+                if (fruits[i].y > GAME_HEIGHT + 50) {
+                    fruits.splice(i, 1);
+                    lives--;
+                    combo = 0;
+                    updateLivesDisplay();
+                    updateScoreDisplay();
+                    
+                    if (lives <= 0) {
+                        endGame();
+                    }
+                }
+            }
+        }
+
+        function updateDifficulty() {
+            difficulty = 1 + Math.floor(score / 100) * 0.2;
+            spawnInterval = Math.max(500, 1500 - Math.floor(score / 50) * 100);
+        }
+
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            
+            drawFruitArea();
+            drawBladeTrail();
+            
+            spawnFruit();
+            
+            for (let i = fruits.length - 1; i >= 0; i--) {
+                fruits[i].update();
+                fruits[i].draw();
+            }
+            
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+            
+            checkMissedFruit();
+            checkHandSlice();
+            updateDifficulty();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            if (gameRunning) return;
+            
+            score = 0;
+            combo = 0;
+            lives = 3;
+            fruits = [];
+            particles = [];
+            bladeTrail = [];
+            difficulty = 1;
+            spawnInterval = 1500;
+            gameRunning = true;
+            gameStarted = true;
+            lastSpawnTime = Date.now();
+            
+            updateScoreDisplay();
+            updateLivesDisplay();
+            document.getElementById('gameOver').classList.remove('show');
+            
+            if (!pose) {
+                initPose();
+            } else {
+                gameLoop();
+            }
+        }
+
+        function endGame() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').classList.add('show');
+        }
+
+        async function initCamera() {
+            const videoElement = document.getElementById('webcam');
+            const webcamCanvas = document.getElementById('webcamCanvas');
+            const actionDisplay = document.getElementById('actionDisplay');
+            
+            try {
+                console.log('开始设置摄像头');
+                actionDisplay.textContent = '正在请求摄像头权限...';
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('浏览器不支持摄像头访问');
+                }
+                
+                console.log('正在获取摄像头设备列表');
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                console.log('找到的摄像头设备:', videoDevices.length);
+                
+                if (videoDevices.length === 0) {
+                    throw new Error('未找到摄像头设备');
+                }
+                
+                actionDisplay.textContent = '正在请求摄像头权限...';
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    },
+                    audio: false
+                });
+                console.log('摄像头权限获取成功');
+                
+                videoElement.srcObject = stream;
+                
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        videoElement.play();
+                        resolve();
+                    };
+                });
+                
+                console.log('视频播放成功');
+                actionDisplay.textContent = '摄像头已就绪';
+                
+                videoElement.style.display = 'block';
+                webcamCanvas.style.display = 'block';
+                
+                initPose(videoElement);
+                
+            } catch (error) {
+                console.error('摄像头初始化失败:', error);
+                actionDisplay.textContent = '摄像头访问失败: ' + error.message;
+            }
+        }
+
+        function initPose(videoElement) {
+            pose = new Pose({
+                locateFile: (file) => `mediapipe/${file}`
+            });
+            
+            pose.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: false,
+                smoothSegmentation: false,
+                minDetectionConfidence: 0.3,
+                minTrackingConfidence: 0.3,
+                selfieMode: false
+            });
+            
+            pose.onResults((results) => {
+                if (!results.poseLandmarks) return;
+                
+                const rightWrist = results.poseLandmarks[16];
+                const leftWrist = results.poseLandmarks[15];
+                const rightShoulder = results.poseLandmarks[12];
+                const leftShoulder = results.poseLandmarks[11];
+                
+                const rightHandUp = rightWrist.y < rightShoulder.y;
+                const leftHandUp = leftWrist.y < leftShoulder.y;
+                
+                const actionDisplay = document.getElementById('actionDisplay');
+                
+                if (rightHandUp && !gameStarted) {
+                    actionDisplay.textContent = '检测到右手! 开始游戏...';
+                    setTimeout(() => {
+                        if (!gameRunning) startGame();
+                    }, 500);
+                } else if (leftHandUp && !gameStarted) {
+                    actionDisplay.textContent = '检测到左手! 开始游戏...';
+                    setTimeout(() => {
+                        if (!gameRunning) startGame();
+                    }, 500);
+                } else if (gameRunning) {
+                    if (rightHandUp && leftHandUp) {
+                        actionDisplay.textContent = '🎮 双刀模式!';
+                    } else if (rightHandUp || leftHandUp) {
+                        actionDisplay.textContent = '🎮 挥动切水果!';
+                    } else {
+                        actionDisplay.textContent = '举起手开始切!';
+                    }
+                } else {
+                    actionDisplay.textContent = '举起右手开始游戏';
+                }
+            });
+            
+            pose.initialize().then(() => {
+                console.log('MediaPipe Pose初始化成功');
+                startPoseLoop(videoElement);
+            }).catch(error => {
+                console.error('Pose初始化失败:', error);
+                document.getElementById('actionDisplay').textContent = 'Pose初始化失败';
+            });
+        }
+
+        function startPoseLoop(videoElement) {
+            const processFrame = async () => {
+                if (videoElement.readyState >= 2) {
+                    await pose.send({ image: videoElement });
+                }
+                requestAnimationFrame(processFrame);
+            };
+            processFrame();
+            console.log('开始处理视频帧');
+            
+            gameLoop();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateScoreDisplay();
+            updateLivesDisplay();
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+            drawFruitArea();
+            
+            initCamera();
+        });
+    </script>
+</body>
+</html>
