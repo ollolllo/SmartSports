@@ -20,6 +20,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
-    https: false
+    https: false,
+    fs: {
+      allow: ['..', resolve(__dirname)]
+    }
   }
 })
