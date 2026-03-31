@@ -247,7 +247,7 @@
         let score = 0;
         let combo = 0;
         let comboTimer = null;
-        let lives = 3;
+        let lives = 100;
         let gameRunning = false;
         let gameStarted = false;
         let lastSpawnTime = 0;
@@ -380,25 +380,54 @@
             if (bladeTrail.length < 2) return;
             
             const now = Date.now();
-            bladeTrail = bladeTrail.filter(p => now - p.time < 150);
+            bladeTrail = bladeTrail.filter(p => now - p.time < 200);
             
             if (bladeTrail.length < 2) return;
             
+            const color = currentTwoHandsUp ? '#ff00ff' : '#ffff00';
+            
+            for (let i = 0; i < bladeTrail.length - 1; i++) {
+                const p1 = bladeTrail[i];
+                const p2 = bladeTrail[i + 1];
+                
+                drawLightningBolt(p1.x, p1.y, p2.x, p2.y, color);
+            }
+            
+            if (bladeTrail.length >= 2) {
+                const first = bladeTrail[0];
+                const last = bladeTrail[bladeTrail.length - 1];
+                drawLightningBolt(first.x, first.y, last.x, last.y, color);
+            }
+        }
+
+        function drawLightningBolt(x1, y1, x2, y2, color) {
             ctx.save();
-            ctx.strokeStyle = currentTwoHandsUp ? '#ff00ff' : '#ffffff';
-            ctx.lineWidth = 4;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
             ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.shadowColor = currentTwoHandsUp ? '#ff00ff' : '#ffffff';
-            ctx.shadowBlur = 20;
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 30;
+            
+            const segments = 8;
+            const dx = (x2 - x1) / segments;
+            const dy = (y2 - y1) / segments;
             
             ctx.beginPath();
-            ctx.moveTo(bladeTrail[0].x, bladeTrail[0].y);
+            ctx.moveTo(x1, y1);
             
-            for (let i = 1; i < bladeTrail.length; i++) {
-                ctx.lineTo(bladeTrail[i].x, bladeTrail[i].y);
+            for (let i = 1; i < segments; i++) {
+                const offsetX = (Math.random() - 0.5) * 20;
+                const offsetY = (Math.random() - 0.5) * 10;
+                ctx.lineTo(x1 + dx * i + offsetX, y1 + dy * i + offsetY);
             }
+            ctx.lineTo(x2, y2);
             ctx.stroke();
+            
+            ctx.shadowBlur = 50;
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+            
             ctx.restore();
         }
 
@@ -493,7 +522,7 @@
                 fruits.push(new Fruit());
                 lastSpawnTime = now;
                 
-                if (Math.random() < 0.3 * difficulty) {
+                if (Math.random() < 0.1 * difficulty) {
                     setTimeout(() => {
                         if (gameRunning) fruits.push(new Fruit());
                     }, spawnInterval / 3);
@@ -519,7 +548,7 @@
 
         function updateDifficulty() {
             difficulty = 1 + Math.floor(score / 100) * 0.2;
-            spawnInterval = Math.max(500, 1500 - Math.floor(score / 50) * 100);
+            spawnInterval = Math.max(500, 2500 - Math.floor(score / 50) * 100);
         }
 
         function gameLoop() {
@@ -557,7 +586,7 @@
             
             score = 0;
             combo = 0;
-            lives = 3;
+            lives = 100;
             fruits = [];
             particles = [];
             bladeTrail = [];
