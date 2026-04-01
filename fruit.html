@@ -427,7 +427,10 @@
             ctx.shadowColor = color;
             ctx.shadowBlur = 30;
             
-            const segments = 8;
+            const distance = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+            const segments = Math.max(4, Math.min(8, Math.floor(distance / 20)));
+            const maxOffset = Math.min(10, distance * 0.1);
+            
             const dx = (x2 - x1) / segments;
             const dy = (y2 - y1) / segments;
             
@@ -435,8 +438,8 @@
             ctx.moveTo(x1, y1);
             
             for (let i = 1; i < segments; i++) {
-                const offsetX = (Math.random() - 0.5) * 20;
-                const offsetY = (Math.random() - 0.5) * 10;
+                const offsetX = (Math.random() - 0.5) * maxOffset;
+                const offsetY = (Math.random() - 0.5) * maxOffset;
                 ctx.lineTo(x1 + dx * i + offsetX, y1 + dy * i + offsetY);
             }
             ctx.lineTo(x2, y2);
@@ -502,21 +505,25 @@
             const handX = currentHandPosition.x;
             const handY = currentHandPosition.y;
 
-            if (handY >= SLICE_ZONE_TOP && handY <= SLICE_ZONE_BOTTOM) {
-                bladeTrail.push(new BladePoint(handX, handY));
-            }
-
             if (lastHandPosition) {
+                const dx = handX - lastHandPosition.x;
+                const dy = handY - lastHandPosition.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > 10) {
+                    bladeTrail.push(new BladePoint(handX, handY));
+                }
+
                 const dt = now - lastHandTime;
                 if (dt > 0) {
-                    const dx = handX - lastHandPosition.x;
-                    const dy = handY - lastHandPosition.y;
-                    const speed = Math.sqrt(dx * dx + dy * dy) / dt * 1000;
+                    const speed = distance / dt * 1000;
 
                     if (speed > 50) {
                         sliceFruit(handX, handY);
                     }
                 }
+            } else {
+                bladeTrail.push(new BladePoint(handX, handY));
             }
 
             lastHandPosition = { x: handX, y: handY };
