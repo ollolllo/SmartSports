@@ -389,19 +389,10 @@
             }
         }
 
-        const SLICE_ZONE_HEIGHT_RATIO = 1 / 6;
-        const SLICE_ZONE_TOP = GAME_HEIGHT * (0.5 - SLICE_ZONE_HEIGHT_RATIO / 2);
-        const SLICE_ZONE_BOTTOM = GAME_HEIGHT * (0.5 + SLICE_ZONE_HEIGHT_RATIO / 2);
+        const SLICE_ZONE_TOP = 0;
+        const SLICE_ZONE_BOTTOM = GAME_HEIGHT;
 
         function drawFruitArea() {
-            const sliceZoneHeight = GAME_HEIGHT * SLICE_ZONE_HEIGHT_RATIO;
-
-            ctx.strokeStyle = '#ff0000';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(0, SLICE_ZONE_TOP, GAME_WIDTH, sliceZoneHeight);
-
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
-            ctx.fillRect(0, SLICE_ZONE_TOP, GAME_WIDTH, sliceZoneHeight);
         }
 
         function drawBladeTrail() {
