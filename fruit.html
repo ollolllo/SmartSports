@@ -208,7 +208,7 @@
         
         <div class="game-wrapper">
             <div class="game-area">
-                <canvas id="gameCanvas" width="400" height="600"></canvas>
+                <canvas id="gameCanvas" width="300" height="800"></canvas>
                 <div id="comboDisplay" class="combo-display"></div>
             </div>
             
@@ -372,10 +372,10 @@
 
             draw() {
                 ctx.save();
-                ctx.globalAlpha = this.life;
+                ctx.globalAlpha = Math.max(0, this.life);
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+                ctx.arc(this.x, this.y, Math.max(0, this.size * this.life), 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
             }
@@ -389,8 +389,19 @@
             }
         }
 
+        const SLICE_ZONE_HEIGHT_RATIO = 1 / 6;
+        const SLICE_ZONE_TOP = GAME_HEIGHT * (0.5 - SLICE_ZONE_HEIGHT_RATIO / 2);
+        const SLICE_ZONE_BOTTOM = GAME_HEIGHT * (0.5 + SLICE_ZONE_HEIGHT_RATIO / 2);
+
         function drawFruitArea() {
-            // 水果区域占满整个游戏区域，无需绘制边界
+            const sliceZoneHeight = GAME_HEIGHT * SLICE_ZONE_HEIGHT_RATIO;
+
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(0, SLICE_ZONE_TOP, GAME_WIDTH, sliceZoneHeight);
+
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.1)';
+            ctx.fillRect(0, SLICE_ZONE_TOP, GAME_WIDTH, sliceZoneHeight);
         }
 
         function drawBladeTrail() {
@@ -451,12 +462,20 @@
         function sliceFruit(handX, handY) {
             const gameX = handX;
             const gameY = handY;
+
+            if (gameY < SLICE_ZONE_TOP || gameY > SLICE_ZONE_BOTTOM) {
+                return false;
+            }
             
             for (let i = fruits.length - 1; i >= 0; i--) {
                 const fruit = fruits[i];
                 if (!fruit.sliced && fruit.containsPoint(gameX, gameY)) {
                     fruit.sliced = true;
-                    
+
+                    const fruitCenterX = fruit.x + fruit.type.size / 2;
+                    const fruitCenterY = fruit.y + fruit.type.size / 2;
+                    drawLightningBolt(gameX, gameY, fruitCenterX, fruitCenterY, '#00ffff');
+
                     const points = currentTwoHandsUp ? fruit.type.points * 2 : fruit.type.points;
                     score += points;
                     combo++;
@@ -485,28 +504,30 @@
                 lastHandPosition = null;
                 return;
             }
-            
+
             const now = Date.now();
             const useTwoHands = currentTwoHandsUp;
-            
+
             const handX = currentHandPosition.x;
             const handY = currentHandPosition.y;
-            
+
+            if (handY >= SLICE_ZONE_TOP && handY <= SLICE_ZONE_BOTTOM) {
+                bladeTrail.push(new BladePoint(handX, handY));
+            }
+
             if (lastHandPosition) {
                 const dt = now - lastHandTime;
                 if (dt > 0) {
                     const dx = handX - lastHandPosition.x;
                     const dy = handY - lastHandPosition.y;
                     const speed = Math.sqrt(dx * dx + dy * dy) / dt * 1000;
-                    
+
                     if (speed > 50) {
-                        if (sliceFruit(handX, handY)) {
-                            bladeTrail.push(new BladePoint(handX, handY));
-                        }
+                        sliceFruit(handX, handY);
                     }
                 }
             }
-            
+
             lastHandPosition = { x: handX, y: handY };
             lastHandTime = now;
         }
