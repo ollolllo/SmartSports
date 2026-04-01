@@ -14,6 +14,7 @@
     <script src="mediapipe/control_utils/control_utils.js"></script>
     <script src="mediapipe/drawing_utils/drawing_utils.js"></script>
     <script src="mediapipe/pose.js"></script>
+    <script src="common/mediapipe_action.js"></script>
     <script>
         // 表情图片对象   
         const expressions = {
@@ -1262,8 +1263,9 @@
 
             updatePlayerAction(playerIndex, landmarks) {
                 // 为特定玩家更新动作
-                const action = this.recognizeActionForPlayer(landmarks);
-                
+                // const action = this.recognizeActionForPlayer(landmarks);
+                const action = recognizeAction(landmarks, { useUpperBodyJumpDetection: useUpperBodyJumpDetection});
+                 
                 // 找到对应的玩家
                 const player = players.find(p => p.id === playerIndex);
                 if (player) {
