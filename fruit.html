@@ -261,10 +261,12 @@
         let fruits = [];
         let particles = [];
         let bladeTrail = [];
+        let rightBladeTrail = [];
+        let leftBladeTrail = [];
         let score = 0;
         let combo = 0;
         let comboTimer = null;
-        let lives = 100;
+        let lives = 10;
         let gameRunning = false;
         let gameStarted = false;
         let lastSpawnTime = 0;
@@ -273,10 +275,16 @@
         
         let pose = null;
         let lastHandPosition = null;
+        let lastRightHandPosition = null;
+        let lastLeftHandPosition = null;
         let handVelocity = { x: 0, y: 0 };
         let lastHandTime = 0;
+        let lastRightHandTime = 0;
+        let lastLeftHandTime = 0;
         let lastTwoHandsTime = 0;
         let currentHandPosition = null;
+        let currentRightHandPosition = null;
+        let currentLeftHandPosition = null;
         let currentHandUp = false;
         let currentTwoHandsUp = false;
 
@@ -396,26 +404,40 @@
         }
 
         function drawBladeTrail() {
-            if (bladeTrail.length < 2) return;
-            
             const now = Date.now();
-            bladeTrail = bladeTrail.filter(p => now - p.time < 200);
             
-            if (bladeTrail.length < 2) return;
+            // 过滤右手轨迹
+            rightBladeTrail = rightBladeTrail.filter(p => now - p.time < 200);
+            // 过滤左手轨迹
+            leftBladeTrail = leftBladeTrail.filter(p => now - p.time < 200);
             
-            const color = currentTwoHandsUp ? '#ff00ff' : '#ffff00';
+            const rightColor = '#ffff00'; // 右手黄色
+            const leftColor = '#00ffff';  // 左手青色
             
-            for (let i = 0; i < bladeTrail.length - 1; i++) {
-                const p1 = bladeTrail[i];
-                const p2 = bladeTrail[i + 1];
+            // 绘制右手轨迹
+            if (rightBladeTrail.length >= 2) {
+                for (let i = 0; i < rightBladeTrail.length - 1; i++) {
+                    const p1 = rightBladeTrail[i];
+                    const p2 = rightBladeTrail[i + 1];
+                    drawLightningBolt(p1.x, p1.y, p2.x, p2.y, rightColor);
+                }
                 
-                drawLightningBolt(p1.x, p1.y, p2.x, p2.y, color);
+                const first = rightBladeTrail[0];
+                const last = rightBladeTrail[rightBladeTrail.length - 1];
+                drawLightningBolt(first.x, first.y, last.x, last.y, rightColor);
             }
             
-            if (bladeTrail.length >= 2) {
-                const first = bladeTrail[0];
-                const last = bladeTrail[bladeTrail.length - 1];
-                drawLightningBolt(first.x, first.y, last.x, last.y, color);
+            // 绘制左手轨迹
+            if (leftBladeTrail.length >= 2) {
+                for (let i = 0; i < leftBladeTrail.length - 1; i++) {
+                    const p1 = leftBladeTrail[i];
+                    const p2 = leftBladeTrail[i + 1];
+                    drawLightningBolt(p1.x, p1.y, p2.x, p2.y, leftColor);
+                }
+                
+                const first = leftBladeTrail[0];
+                const last = leftBladeTrail[leftBladeTrail.length - 1];
+                drawLightningBolt(first.x, first.y, last.x, last.y, leftColor);
             }
         }
 
@@ -494,40 +516,73 @@
 
         function checkHandSlice() {
             if (!gameRunning) return;
-            if (!currentHandUp || !currentHandPosition) {
-                lastHandPosition = null;
-                return;
-            }
-
+            
             const now = Date.now();
             const useTwoHands = currentTwoHandsUp;
 
-            const handX = currentHandPosition.x;
-            const handY = currentHandPosition.y;
+            // 处理右手
+            if (currentRightHandPosition) {
+                const handX = currentRightHandPosition.x;
+                const handY = currentRightHandPosition.y;
 
-            if (lastHandPosition) {
-                const dx = handX - lastHandPosition.x;
-                const dy = handY - lastHandPosition.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (lastRightHandPosition) {
+                    const dx = handX - lastRightHandPosition.x;
+                    const dy = handY - lastRightHandPosition.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance > 10) {
-                    bladeTrail.push(new BladePoint(handX, handY));
-                }
-
-                const dt = now - lastHandTime;
-                if (dt > 0) {
-                    const speed = distance / dt * 1000;
-
-                    if (speed > 50) {
-                        sliceFruit(handX, handY);
+                    if (distance > 10) {
+                        rightBladeTrail.push(new BladePoint(handX, handY));
                     }
+
+                    const dt = now - lastRightHandTime;
+                    if (dt > 0) {
+                        const speed = distance / dt * 1000;
+
+                        if (speed > 50) {
+                            sliceFruit(handX, handY);
+                        }
+                    }
+                } else {
+                    rightBladeTrail.push(new BladePoint(handX, handY));
                 }
+
+                lastRightHandPosition = { x: handX, y: handY };
+                lastRightHandTime = now;
             } else {
-                bladeTrail.push(new BladePoint(handX, handY));
+                lastRightHandPosition = null;
             }
 
-            lastHandPosition = { x: handX, y: handY };
-            lastHandTime = now;
+            // 处理左手
+            if (currentLeftHandPosition) {
+                const handX = currentLeftHandPosition.x;
+                const handY = currentLeftHandPosition.y;
+
+                if (lastLeftHandPosition) {
+                    const dx = handX - lastLeftHandPosition.x;
+                    const dy = handY - lastLeftHandPosition.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > 10) {
+                        leftBladeTrail.push(new BladePoint(handX, handY));
+                    }
+
+                    const dt = now - lastLeftHandTime;
+                    if (dt > 0) {
+                        const speed = distance / dt * 1000;
+
+                        if (speed > 50) {
+                            sliceFruit(handX, handY);
+                        }
+                    }
+                } else {
+                    leftBladeTrail.push(new BladePoint(handX, handY));
+                }
+
+                lastLeftHandPosition = { x: handX, y: handY };
+                lastLeftHandTime = now;
+            } else {
+                lastLeftHandPosition = null;
+            }
         }
 
         function showCombo() {
@@ -622,10 +677,12 @@
             
             score = 0;
             combo = 0;
-            lives = 100;
+            lives = 10;
             fruits = [];
             particles = [];
             bladeTrail = [];
+            rightBladeTrail = [];
+            leftBladeTrail = [];
             difficulty = 1;
             spawnInterval = 1500;
             gameRunning = true;
@@ -759,23 +816,36 @@
                 currentHandUp = rightHandUp || leftHandUp;
                 
                 if (currentHandUp) {
-                    const wrist = rightHandUp ? rightWristMirrored : leftWristMirrored;
-                    currentHandPosition = {
-                        x: wrist.x * GAME_WIDTH,
-                        y: wrist.y * GAME_HEIGHT
-                    };
+                    if (rightHandUp) {
+                        currentRightHandPosition = {
+                            x: rightWristMirrored.x * GAME_WIDTH,
+                            y: rightWristMirrored.y * GAME_HEIGHT
+                        };
+                    } else {
+                        currentRightHandPosition = null;
+                    }
+                    
+                    if (leftHandUp) {
+                        currentLeftHandPosition = {
+                            x: leftWristMirrored.x * GAME_WIDTH,
+                            y: leftWristMirrored.y * GAME_HEIGHT
+                        };
+                    } else {
+                        currentLeftHandPosition = null;
+                    }
                 } else {
-                    currentHandPosition = null;
+                    currentRightHandPosition = null;
+                    currentLeftHandPosition = null;
                 }
                 
                 const actionDisplay = document.getElementById('actionDisplay');
                 
-                if (rightHandUp && !gameStarted) {
+                if (rightHandUp && (!gameStarted || !gameRunning)) {
                     actionDisplay.textContent = '检测到右手! 开始游戏...';
                     setTimeout(() => {
                         if (!gameRunning) startGame();
                     }, 500);
-                } else if (leftHandUp && !gameStarted) {
+                } else if (leftHandUp && (!gameStarted || !gameRunning)) {
                     actionDisplay.textContent = '检测到左手! 开始游戏...';
                     setTimeout(() => {
                         if (!gameRunning) startGame();
