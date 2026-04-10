@@ -2,17 +2,77 @@
   "name": "smart-sports-frog-game",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "main": "main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "electron .",
+    "electron:build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.smartsports.games",
+    "productName": "AI智能体育游戏",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "mediapipe/**/*",
+      "common/**/*",
+      "*.html",
+      "*.js",
+      "*.css",
+      "*.json",
+      "*.bat",
+      "*.plist"
+    ],
+    "extraResources": [
+      {
+        "from": "mediapipe",
+        "to": "mediapipe"
+      },
+      {
+        "from": "common",
+        "to": "common"
+      }
+    ],
+    "asarUnpack": [
+      "mediapipe/**/*",
+      "common/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "rfc3161TimeStampServer": ""
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "entitlements": "entitlements.plist",
+      "entitlementsInherit": "entitlements.plist"
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "rpm",
+        "AppImage"
+      ]
+    }
   },
   "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3",
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "@mediapipe/pose": "^0.5.1675469404",
+    "@tensorflow-models/pose-detection": "^2.0.0",
     "@tensorflow/tfjs": "^4.0.0",
-    "@tensorflow-models/pose-detection": "^2.0.0"
+    "@tensorflow/tfjs-backend-webgpu": "^4.22.0"
   }
 }

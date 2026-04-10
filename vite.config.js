@@ -23,6 +23,12 @@ export default defineConfig({
     https: false,
     fs: {
       allow: ['..', resolve(__dirname)]
+    },
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, *'
     }
-  }
+  },
+  assetsInclude: ['**/*.tflite', '**/*.wasm', '**/*.data', '**/*.binarypb']
 })

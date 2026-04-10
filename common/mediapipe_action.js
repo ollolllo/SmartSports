@@ -57,6 +57,8 @@ const ACTION_TYPE = {
     HANDS_OPEN: '张开双手',
     JUMPING: '跳起来',
     HANDS_ON_HEAD: '双手抱头',
+    RIGHT_HAND_EXTENDED: '伸开右手',
+    LEFT_HAND_EXTENDED: '伸开左手',
     INCOMPLETE: '未检测到完整姿态'
 };
 
@@ -92,6 +94,165 @@ function calculateDistance(point1, point2) {
 }
 
 /**
+ * 检测是否张开双手
+ *
+ * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
+ * @param {number} shoulderWidth - 肩宽
+ * @returns {boolean} - 是否张开双手
+ */
+function detectHandsOpen(landmarks, shoulderWidth) {
+    const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+    const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
+    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
+
+    const isArmsHorizontal = Math.abs(leftWrist.y - leftShoulder.y) < shoulderWidth * 0.9 &&
+                            Math.abs(rightWrist.y - rightShoulder.y) < shoulderWidth * 0.9;
+    return isArmsHorizontal;
+}
+
+/**
+ * 检测是否双手抱头
+ *
+ * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
+ * @param {number} handsOnHeadThreshold - 双手抱头距离阈值
+ * @returns {boolean} - 是否双手抱头
+ */
+function detectHandsOnHead(landmarks, handsOnHeadThreshold) {
+    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
+    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
+    const nose = landmarks[LANDMARK_INDEX.NOSE];
+
+    const leftWristToNose = calculateDistance(leftWrist, nose);
+    const rightWristToNose = calculateDistance(rightWrist, nose);
+    return leftWristToNose < handsOnHeadThreshold &&
+           rightWristToNose < handsOnHeadThreshold;
+}
+
+/**
+ * 检测是否举起双手
+ *
+ * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
+ * @param {number} armRaisedThreshold - 抬手阈值
+ * @returns {boolean} - 是否举起双手
+ */
+function detectBothHandsRaised(landmarks, armRaisedThreshold) {
+    const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+    const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
+    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
+
+    const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
+    const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+    return leftArmRaised && rightArmRaised;
+}
+
+/**
+ * 检测是否举起右手
+ *
+ * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
+ * @param {number} armRaisedThreshold - 抬手阈值
+ * @returns {boolean} - 是否举起右手
+ */
+function detectRightHandRaised(landmarks, armRaisedThreshold) {
+    const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+    const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
+    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
+
+    const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
+    const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+    return rightArmRaised && !leftArmRaised;
+}
+
+/**
+ * 检测是否举起左手
+ *
+ * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
+ * @param {number} armRaisedThreshold - 抬手阈值
+ * @returns {boolean} - 是否举起左手
+ */
+function detectLeftHandRaised(landmarks, armRaisedThreshold) {
+    const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+    const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
+    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
+
+    const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
+    const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+    return leftArmRaised && !rightArmRaised;
+}
+
+/**
+ * 检测是否伸开右手
+ *
+ * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
+ * @param {number} shoulderWidth - 肩宽
+ * @param {number} armRaisedThreshold - 抬手阈值
+ * @returns {boolean} - 是否伸开右手
+ */
+function detectRightHandExtended(landmarks, shoulderWidth, armRaisedThreshold) {
+    const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
+    const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
+
+    const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+    const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
+
+    return Math.abs(rightWrist.y - rightShoulder.y) < shoulderWidth * 0.4 &&
+           Math.abs(rightWrist.x - rightShoulder.x) > shoulderWidth * 0.5 &&
+           !rightArmRaised &&
+           !leftArmRaised;
+}
+
+/**
+ * 检测是否伸开左手
+ *
+ * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
+ * @param {number} shoulderWidth - 肩宽
+ * @param {number} armRaisedThreshold - 抬手阈值
+ * @returns {boolean} - 是否伸开左手
+ */
+function detectLeftHandExtended(landmarks, shoulderWidth, armRaisedThreshold) {
+    const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
+    const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
+
+    const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
+    const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
+
+    return Math.abs(leftWrist.y - leftShoulder.y) < shoulderWidth * 0.4 &&
+           Math.abs(leftWrist.x - leftShoulder.x) > shoulderWidth * 0.5 &&
+           !leftArmRaised &&
+           !rightArmRaised;
+}
+
+/**
+ * 检测是否跳跃
+ *
+ * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
+ * @param {Object} config - 配置选项
+ * @returns {boolean} - 是否跳跃
+ */
+function detectJumping(landmarks, config) {
+    const nose = landmarks[LANDMARK_INDEX.NOSE];
+    const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+    const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+    const leftHip = landmarks[LANDMARK_INDEX.LEFT_HIP];
+    const rightHip = landmarks[LANDMARK_INDEX.RIGHT_HIP];
+
+    if (config.useUpperBodyJumpDetection) {
+        const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
+        return upperBodyY < config.jumpUpperThreshold;
+    } else {
+        const hipY = (leftHip.y + rightHip.y) / 2;
+        return hipY < config.jumpLowerThreshold;
+    }
+}
+
+/**
  * 识别单个人体的姿态动作
  *
  * @param {Array} landmarks - MediaPipe Pose 返回的关键点数组
@@ -110,8 +271,10 @@ function calculateDistance(point1, point2) {
  * 2. 举起双手 - 双手同时上举
  * 3. 举起右手 - 仅右手上举
  * 4. 举起左手 - 仅左手上举
- * 5. 跳起来 - 身体向上跃起
- * 6. 站立 - 常态站立
+ * 5. 伸开右手 - 右手水平伸展
+ * 6. 伸开左手 - 左手水平伸展
+ * 7. 跳起来 - 身体向上跃起
+ * 8. 站立 - 常态站立
  *
  * @example
  * // 基础用法
@@ -125,73 +288,64 @@ function calculateDistance(point1, point2) {
  *     armRaisedThresholdRatio: 0.3
  * });
  */
-function recognizeAction(landmarks, options = {}) {
-    const defaultOptions = {
-        useUpperBodyJumpDetection: true,
-        armRaisedThresholdRatio: 0.3,
-        jumpUpperThreshold: 0.25,
-        jumpLowerThreshold: 0.3,
-        handsOnHeadThreshold: 0.3
-    };
+// function recognizeAction(landmarks, options = {}) {
+//     const defaultOptions = {
+//         useUpperBodyJumpDetection: true,
+//         armRaisedThresholdRatio: 0.3,
+//         jumpUpperThreshold: 0.25,
+//         jumpLowerThreshold: 0.3,
+//         handsOnHeadThreshold: 0.3
+//     };
 
-    const config = { ...defaultOptions, ...options };
+//     const config = { ...defaultOptions, ...options };
 
-    if (!isValidLandmarks(landmarks)) {
-        return ACTION_TYPE.INCOMPLETE;
-    }
+//     if (!isValidLandmarks(landmarks)) {
+//         return ACTION_TYPE.INCOMPLETE;
+//     }
 
-    const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
-    const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
-    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
-    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
-    const nose = landmarks[LANDMARK_INDEX.NOSE];
-    const leftHip = landmarks[LANDMARK_INDEX.LEFT_HIP];
-    const rightHip = landmarks[LANDMARK_INDEX.RIGHT_HIP];
+//     const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+//     const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+//     const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+//     const armRaisedThreshold = Math.max(0.1, shoulderWidth * config.armRaisedThresholdRatio);
 
-    const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
-    const armRaisedThreshold = Math.max(0.1, shoulderWidth * config.armRaisedThresholdRatio);
-
-    const leftArmRaised = leftShoulder.y - leftWrist.y > armRaisedThreshold;
-    const rightArmRaised = rightShoulder.y - rightWrist.y > armRaisedThreshold;
-
-    const leftWristToNose = calculateDistance(leftWrist, nose);
-    const rightWristToNose = calculateDistance(rightWrist, nose);
-    const isHandsOnHead = leftWristToNose < config.handsOnHeadThreshold &&
-                          rightWristToNose < config.handsOnHeadThreshold;
-
-    const isBothHandsRaised = leftArmRaised && rightArmRaised;
-    const isRightHandRaised = rightArmRaised && !leftArmRaised;
-    const isLeftHandRaised = leftArmRaised && !rightArmRaised;
-
-    const isArmsHorizontal = Math.abs(leftWrist.y - leftShoulder.y) < shoulderWidth * 0.9 &&
-                            Math.abs(rightWrist.y - rightShoulder.y) < shoulderWidth * 0.9;
-    const isHandsOpen = isArmsHorizontal;
-
-    let isJumping = false;
-    if (config.useUpperBodyJumpDetection) {
-        const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
-        isJumping = upperBodyY < config.jumpUpperThreshold;
-    } else {
-        const hipY = (leftHip.y + rightHip.y) / 2;
-        isJumping = hipY < config.jumpLowerThreshold;
-    }
-
-    if (isHandsOpen) {
-        return ACTION_TYPE.HANDS_OPEN;
-    } else if (isHandsOnHead) {
-        return ACTION_TYPE.HANDS_ON_HEAD;
-    } else if (isBothHandsRaised) {
-        return ACTION_TYPE.BOTH_HANDS_RAISED;
-    } else if (isRightHandRaised) {
-        return ACTION_TYPE.RIGHT_HAND_RAISED;
-    } else if (isLeftHandRaised) {
-        return ACTION_TYPE.LEFT_HAND_RAISED;
-    } else if (isJumping) {
-        return ACTION_TYPE.JUMPING;
-    } else {
-        return ACTION_TYPE.STANDING;
-    }
-}
+//     // 按优先级顺序检测动作
+//     // 1. 张开双手 - 双臂水平展开
+//     if (detectHandsOpen(landmarks, shoulderWidth)) {
+//         return ACTION_TYPE.HANDS_OPEN;
+//     }
+//     // 2. 双手抱头 - 双手靠近头部
+//     else if (detectHandsOnHead(landmarks, config.handsOnHeadThreshold)) {
+//         return ACTION_TYPE.HANDS_ON_HEAD;
+//     }
+//     // 3. 举起双手 - 双手同时上举
+//     else if (detectBothHandsRaised(landmarks, armRaisedThreshold)) {
+//         return ACTION_TYPE.BOTH_HANDS_RAISED;
+//     }
+//     // 4. 举起右手 - 仅右手上举
+//     else if (detectRightHandRaised(landmarks, armRaisedThreshold)) {
+//         return ACTION_TYPE.RIGHT_HAND_RAISED;
+//     }
+//     // 5. 举起左手 - 仅左手上举
+//     else if (detectLeftHandRaised(landmarks, armRaisedThreshold)) {
+//         return ACTION_TYPE.LEFT_HAND_RAISED;
+//     }
+//     // 6. 伸开右手 - 右手水平伸展
+//     else if (detectRightHandExtended(landmarks, shoulderWidth, armRaisedThreshold)) {
+//         return ACTION_TYPE.RIGHT_HAND_EXTENDED;
+//     }
+//     // 7. 伸开左手 - 左手水平伸展
+//     else if (detectLeftHandExtended(landmarks, shoulderWidth, armRaisedThreshold)) {
+//         return ACTION_TYPE.LEFT_HAND_EXTENDED;
+//     }
+//     // 8. 跳起来 - 身体向上跃起
+//     else if (detectJumping(landmarks, config)) {
+//         return ACTION_TYPE.JUMPING;
+//     }
+//     // 9. 站立 - 常态站立
+//     else {
+//         return ACTION_TYPE.STANDING;
+//     }
+// }
 
 /**
  * 识别多人场景中每个人的动作
@@ -351,4 +505,40 @@ class PoseActionRecognizer {
  *         // 处理其他状态
  *         break;
  * }
+ */
+
+/**
+ * 示例6: 单独使用某个动作检测函数
+ *
+ * const landmarks = results.poseLandmarks;
+ * const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+ * const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+ * const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+ *
+ * // 单独检测是否张开双手
+ * const isHandsOpen = detectHandsOpen(landmarks, shoulderWidth);
+ * console.log('是否张开双手:', isHandsOpen);
+ *
+ * // 单独检测是否举起右手
+ * const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+ * const isRightHandRaised = detectRightHandRaised(landmarks, armRaisedThreshold);
+ * console.log('是否举起右手:', isRightHandRaised);
+ */
+
+/**
+ * 示例7: 单独检测伸开左右手
+ *
+ * const landmarks = results.poseLandmarks;
+ * const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+ * const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+ * const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+ * const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+ *
+ * // 单独检测是否伸开右手
+ * const isRightHandExtended = detectRightHandExtended(landmarks, shoulderWidth, armRaisedThreshold);
+ * console.log('是否伸开右手:', isRightHandExtended);
+ *
+ * // 单独检测是否伸开左手
+ * const isLeftHandExtended = detectLeftHandExtended(landmarks, shoulderWidth, armRaisedThreshold);
+ * console.log('是否伸开左手:', isLeftHandExtended);
  */

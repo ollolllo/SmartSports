@@ -41,9 +41,9 @@ const LANDMARK_INDEX = {
     LEFT_ANKLE: 27,       // 左踝
     RIGHT_ANKLE: 28,      // 右踝
     LEFT_HEEL: 29,        // 左脚后跟
-    RIGHT_HEEL: 30,      // 右脚后跟
-    LEFT_FOOT_INDEX: 31, // 左脚趾
-    RIGHT_FOOT_INDEX: 32  // 右脚趾
+    RIGHT_HEEL: 30,       // 右脚后跟
+    LEFT_FOOT_INDEX: 31,  // 左脚趾
+    RIGHT_FOOT_INDEX: 32   // 右脚趾
 };
 
 /**
@@ -77,7 +77,7 @@ function isValidLandmarks(landmarks, requiredIndices = [0, 11, 12, 15, 16, 23, 2
     if (!landmarks || !Array.isArray(landmarks)) {
         return false;
     }
-    return requiredIndices.every(idx => landmarks[idx] && landmarks[idx].visibility > 0.3);
+    return requiredIndices.every(idx => landmarks[idx]);
 }
 
 /**
@@ -122,7 +122,7 @@ function calculateDistance(point1, point2) {
  * // 自定义配置
  * const action = recognizeAction(landmarks, {
  *     useUpperBodyJumpDetection: false,
- *     armRaisedThresholdRatio: 0.4
+ *     armRaisedThresholdRatio: 0.3
  * });
  */
 function recognizeAction(landmarks, options = {}) {
@@ -271,113 +271,84 @@ class PoseActionRecognizer {
     }
 }
 
-/**
- * MediaPipe Pose 动作识别模块
- *
- * @module mediapipe_action
- * @description 提供基于 MediaPipe Pose 关键点的动作识别功能
- *
- * 使用方式：
- * 1. HTML 中引入: <script src="common/mediapipe_action.js"></script>
- * 2. 调用: const action = recognizeAction(landmarks);
- *
- * @since 1.0.0
- */
-
 // ==================== 调用示例 ====================
+// 本模块的使用方式：页面负责获取 landmarks 数据，调用本模块函数进行动作识别
+// 页面获取 landmarks 的方式由页面自己决定（可以来自 MediaPipe 回调、录制的视频、API 等）
 
 /**
- * 示例1: 基础用法 - 单人动作识别
+ * 示例1: 直接传入关键点数据进行动作识别
  *
- * // 假设 results 来自 MediaPipe Pose.onResults 回调
- * pose.onResults((results) => {
- *     if (results.poseLandmarks) {
- *         // 传入关键点数组，获取动作字符串
- *         const action = recognizeAction(results.poseLandmarks);
- *         console.log(action);  // "举起右手" | "举起左手" | "举起双手" | "张开双手" | "跳起来" | "站立" | "未检测到完整姿态"
- *     }
- * });
+ * // landmarks 数据来自 MediaPipe Pose 的检测结果
+ * const landmarks = results.poseLandmarks;  // 单人模式
+ *
+ * // 调用识别函数，直接返回动作结果
+ * const action = recognizeAction(landmarks);
+ * // 返回值: "举起右手" | "举起左手" | "举起双手" | "张开双手" | "跳起来" | "站立" | "未检测到完整姿态"
+ *
+ * // 页面根据自己的业务逻辑处理识别结果
+ * if (action === '举起右手') {
+ *     // 处理右手举起的逻辑
+ * }
  */
 
 /**
  * 示例2: 多人模式 - 识别多人动作
  *
- * pose.onResults((results) => {
- *     if (results.multiPoseLandmarks) {
- *         const actions = recognizeMultiPlayerAction(results.multiPoseLandmarks);
- *         actions.forEach((item, index) => {
- *             console.log(`玩家${index + 1}:`, item.action);
- *         });
- *     }
+ * // landmarks 数据来自 MediaPipe Pose 的检测结果
+ * const multiLandmarks = results.multiPoseLandmarks;  // 多人模式，数组
+ *
+ * // 调用识别函数，传入多人关键点数组
+ * const actions = recognizeMultiPlayerAction(multiLandmarks);
+ * // 返回值: [{landmarks, action}, ...] 每个人的识别结果
+ *
+ * // 页面遍历处理每个人的动作
+ * actions.forEach((item, index) => {
+ *     console.log(`玩家${index + 1}:`, item.action);
  * });
  */
 
 /**
- * 示例3: 使用 PoseActionRecognizer 类
- *
- * const recognizer = new PoseActionRecognizer({
- *     useUpperBodyJumpDetection: true  // 使用上半身判断跳跃
- * });
- *
- * pose.onResults((results) => {
- *     if (results.poseLandmarks) {
- *         const action = recognizer.recognize(results.poseLandmarks);
- *         // 处理动作...
- *     }
- * });
- */
-
-/**
- * 示例4: 自定义配置选项
+ * 示例3: 自定义配置选项
  *
  * const action = recognizeAction(landmarks, {
  *     useUpperBodyJumpDetection: false,  // 使用下半身（髋部）判断跳跃
- *     armRaisedThresholdRatio: 0.4,      // 抬手阈值比例
- *     jumpUpperThreshold: 0.2,           // 上半身跳跃阈值（值越小要求跳得越高）
- *     jumpLowerThreshold: 0.25,          // 下半身跳跃阈值
- *     handsOnHeadThreshold: 0.25         // 双手抱头距离阈值
+ *     armRaisedThresholdRatio: 0.3,      // 抬手阈值比例
+ *     jumpUpperThreshold: 0.25,           // 上半身跳跃阈值（值越小要求跳得越高）
+ *     jumpLowerThreshold: 0.3,           // 下半身跳跃阈值
+ *     handsOnHeadThreshold: 0.3         // 双手抱头距离阈值
  * });
  */
 
 /**
- * 示例5: 关键点有效性检查
+ * 示例4: 关键点有效性检查（可选使用）
  *
- * pose.onResults((results) => {
- *     if (results.poseLandmarks) {
- *         if (isValidLandmarks(results.poseLandmarks)) {
- *             const action = recognizeAction(results.poseLandmarks);
- *             // 安全地进行动作识别
- *         } else {
- *             console.log('关键点不完整，无法识别');
- *         }
- *     }
- * });
+ * if (isValidLandmarks(landmarks)) {
+ *     const action = recognizeAction(landmarks);
+ * } else {
+ *     console.log('关键点不完整，无法识别');
+ * }
  */
 
 /**
- * 示例6: 使用动作类型常量进行比较
+ * 示例5: 使用动作类型常量进行比较（推荐方式）
  *
- * pose.onResults((results) => {
- *     if (results.poseLandmarks) {
- *         const action = recognizeAction(results.poseLandmarks);
+ * const action = recognizeAction(landmarks);
  *
- *         switch (action) {
- *             case ACTION_TYPE.RIGHT_HAND_RAISED:
- *                 // 处理右手举起
- *                 break;
- *             case ACTION_TYPE.LEFT_HAND_RAISED:
- *                 // 处理左手举起
- *                 break;
- *             case ACTION_TYPE.BOTH_HANDS_RAISED:
- *                 // 处理双手举起
- *                 break;
- *             case ACTION_TYPE.JUMPING:
- *                 // 处理跳跃
- *                 break;
- *             default:
- *                 // 处理其他状态
- *                 break;
- *         }
- *     }
- * });
+ * switch (action) {
+ *     case ACTION_TYPE.RIGHT_HAND_RAISED:
+ *         // 处理右手举起
+ *         break;
+ *     case ACTION_TYPE.LEFT_HAND_RAISED:
+ *         // 处理左手举起
+ *         break;
+ *     case ACTION_TYPE.BOTH_HANDS_RAISED:
+ *         // 处理双手举起
+ *         break;
+ *     case ACTION_TYPE.JUMPING:
+ *         // 处理跳跃
+ *         break;
+ *     default:
+ *         // 处理其他状态
+ *         break;
+ * }
  */

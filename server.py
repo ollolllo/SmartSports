@@ -9,9 +9,9 @@ class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         super().end_headers()
 
-os.chdir('d:\projects\SmartSports')
+os.chdir('d:\\projects\\AI自习室\\SmartSports')
 
-PORT = 5173
+PORT = 3000
 
 handler = MyHTTPRequestHandler
 
