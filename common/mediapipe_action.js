@@ -236,15 +236,40 @@ function detectLeftHandExtended(landmarks, shoulderWidth, armRaisedThreshold) {
  * @param {Object} config - 配置选项
  * @returns {boolean} - 是否跳跃
  */
+// function detectJumping(landmarks, config) {
+//     const nose = landmarks[LANDMARK_INDEX.NOSE];
+//     const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
+//     const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+//     const leftHip = landmarks[LANDMARK_INDEX.LEFT_HIP];
+//     const rightHip = landmarks[LANDMARK_INDEX.RIGHT_HIP];
+
+//     if (config.useUpperBodyJumpDetection) {
+//         const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
+//         return upperBodyY < config.jumpUpperThreshold;
+//     } else {
+//         const hipY = (leftHip.y + rightHip.y) / 2;
+//         return hipY < config.jumpLowerThreshold;
+//     }
+// }
 function detectJumping(landmarks, config) {
     const nose = landmarks[LANDMARK_INDEX.NOSE];
     const leftShoulder = landmarks[LANDMARK_INDEX.LEFT_SHOULDER];
     const rightShoulder = landmarks[LANDMARK_INDEX.RIGHT_SHOULDER];
+    const leftWrist = landmarks[LANDMARK_INDEX.LEFT_WRIST];
+    const rightWrist = landmarks[LANDMARK_INDEX.RIGHT_WRIST];
     const leftHip = landmarks[LANDMARK_INDEX.LEFT_HIP];
     const rightHip = landmarks[LANDMARK_INDEX.RIGHT_HIP];
 
     if (config.useUpperBodyJumpDetection) {
         const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
+        // 排除举手状态：手腕在肩膀上方则不判定为跳
+        const armsRaised = leftShoulder.y - leftWrist.y > 0.05 ||
+                          rightShoulder.y - rightWrist.y > 0.05;
+        // 排除手臂放下状态：手腕在肩膀下方（正在放下）
+        const armsLowering = leftWrist.y > leftShoulder.y && rightWrist.y > rightShoulder.y;
+        if (armsRaised || armsLowering) {
+            return false;
+        }
         return upperBodyY < config.jumpUpperThreshold;
     } else {
         const hipY = (leftHip.y + rightHip.y) / 2;

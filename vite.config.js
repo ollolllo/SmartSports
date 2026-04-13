@@ -30,5 +30,18 @@ export default defineConfig({
       'Access-Control-Allow-Headers': 'Content-Type, *'
     }
   },
-  assetsInclude: ['**/*.tflite', '**/*.wasm', '**/*.data', '**/*.binarypb']
+  assetsInclude: ['**/*.tflite', '**/*.wasm', '**/*.data', '**/*.binarypb'],
+  plugins: [
+    {
+      name: 'tflite-mime-type',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url.endsWith('.tflite')) {
+            res.setHeader('Content-Type', 'application/octet-stream');
+          }
+          next();
+        });
+      }
+    }
+  ]
 })

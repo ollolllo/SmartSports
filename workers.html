@@ -9,11 +9,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=no">
-    <title>金元宝和石头 - 2人版</title>
+    <title>金元宝和石头 - 2人新版</title>
+    <script src="mediapipe/pose/pose.js"></script>
     <script src="mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="mediapipe/control_utils/control_utils.js"></script>
     <script src="mediapipe/drawing_utils/drawing_utils.js"></script>
-    <script src="mediapipe/pose.js"></script>l
     <script>
         // 表情图片对象   
         const expressions = {
@@ -466,7 +465,7 @@
             position: absolute;
             top: 50px;
             right: 20px;
-            width: 360px;
+            width: 460px;
             height: 220px;
             background: #000;
             border-radius: 5px;
@@ -1002,20 +1001,35 @@
                 
                 this.isCameraStarted = false;
                 this.isRecognizing = false;
-                this.pose = null;
                 this.camera = null;
+                this.selfieMode = true;
                 
+                // 创建两个 Canvas 用于视频流复制
+                this.player1Canvas = document.createElement('canvas');
+                this.player2Canvas = document.createElement('canvas');
+                this.player1Ctx = this.player1Canvas.getContext('2d');
+                this.player2Ctx = this.player2Canvas.getContext('2d');
+                
+                // Web Workers
+                this.workers = {};
+                this.workerStates = {1: false, 2: false};
+                this.playerPoses = {1: null, 2: null};
+                this.poseHistory = {1: [], 2: []};
+                this.maxPoseHistory = 2;
+                this.playerActions = {1: "站立", 2: "站立"};
+                this.actionHistory = {1: [], 2: []};
+                this.maxActionHistory = 3;
+                
+                // 头部位置历史
                 this.headPositionHistory = [];
                 this.maxHeadHistoryPoints = 20;
-                this.verticalPositionHistory = [];
-                this.maxVerticalHistoryPoints = 30;
                 
-                this.baselineHipY = null;
-                this.baselineSetTime = 0;
-                this.lastKneeY = null;
-                this.jumpDetected = false;
-                this.jumpStartTime = 0;
-                this.hipYHistory = [];
+                // 垂直位置历史
+                this.verticalPositionHistory = [];
+                this.maxVerticalHistoryPoints = 20;
+                
+                // 跳跃检测
+                this.jumpStartTime = null;
 
                 this.init();
             }
@@ -1074,14 +1088,38 @@
 
                     console.log('正在请求摄像头权限');
                     let stream;
+                    
+                    // 自动检测可用摄像头
+                    let targetDeviceId = null;
+                    // 优先选择非OBS虚拟摄像头的真实摄像头
+                    for (const device of videoDevices) {
+                        const label = device.label || '';
+                        if (!label.toLowerCase().includes('obs') && !label.toLowerCase().includes('virtual')) {
+                            targetDeviceId = device.deviceId;
+                            console.log('选择真实摄像头:', device.label || '未命名设备', 'ID:', targetDeviceId);
+                            break;
+                        }
+                    }
+                    // 如果没有找到真实摄像头，使用第一个设备
+                    if (!targetDeviceId && videoDevices.length > 0) {
+                        targetDeviceId = videoDevices[0].deviceId;
+                        console.log('使用第一个可用摄像头:', videoDevices[0].label || '未命名设备', 'ID:', targetDeviceId);
+                    }
+                    
+                    if (!targetDeviceId) {
+                        throw new Error('未找到可用的摄像头设备');
+                    }
+                    
                     try {
                         stream = await navigator.mediaDevices.getUserMedia({
                             video: {
-                                width: { ideal: 640 },
-                                height: { ideal: 480 }
+                                deviceId: targetDeviceId,
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
                             },
                             audio: false
                         });
+                        console.log('使用自动检测的设备获取摄像头成功');
                     } catch (mediaError) {
                         console.error('getUserMedia失败:', mediaError.name, mediaError.message);
                         console.error('错误详情:', mediaError);
@@ -1094,14 +1132,16 @@
                         if (mediaError.name === 'NotAllowedError') {
                             throw new Error('摄像头权限被拒绝，请在浏览器设置中允许摄像头访问');
                         } else if (mediaError.name === 'NotFoundError') {
-                            throw new Error('找不到摄像头设备');
+                            throw new Error('找不到指定的摄像头设备，请检查设备ID是否正确');
                         } else if (mediaError.name === 'NotReadableError') {
                             throw new Error('摄像头被其他应用占用');
                         } else if (mediaError.name === 'OverconstrainedError') {
-                            // 尝试使用默认设置
-                            console.log('尝试使用默认摄像头设置');
+                            // 尝试使用指定的deviceId但不设置约束
+                            console.log('指定的摄像头不支持约束，尝试使用默认设置');
                             stream = await navigator.mediaDevices.getUserMedia({
-                                video: true,
+                                video: {
+                                    deviceId: targetDeviceId
+                                },
                                 audio: false
                             });
                         } else {
@@ -1122,68 +1162,16 @@
                             console.log('视频播放成功');
                             this.actionDisplay.textContent = '摄像头已就绪';
 
-                            console.log('开始初始化MediaPipe Pose');
-                            // 检测是否为移动端
-                            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                            console.log('是否为移动端:', isMobile);
+                            console.log('开始初始化Web Workers');
+                            await this.initializeWorkers();
                             
-                            this.isMobile = isMobile; // 保存设备类型供后续使用
-                            
-                            console.log('创建Pose实例，使用本地文件路径');
-                            this.pose = new Pose({
-                                locateFile: (file) => {
-                                    const filePath = `mediapipe/${file}`;
-                                    console.log('加载文件:', filePath);
-                                    return filePath;
-                                },
-                                multiPose: true
-                            });
-                            
-                            console.log('Pose实例创建成功，开始设置选项');
-                            
-
-                            this.pose.setOptions({
-                                modelComplexity: 1,
-                                smoothLandmarks: true,
-                                enableSegmentation: false,
-                                smoothSegmentation: false,
-                                minDetectionConfidence: 0.1,
-                                minTrackingConfidence: 0.1,
-                                selfieMode: false,
-                                maxNumPoses: 4
-                            });
-                            this.selfieMode = false;
-
-                            this.pose.onResults((results) => this.onPoseResults(results));
-
-                            try {
-                                console.log('开始初始化Pose模型...');
-                                await this.pose.initialize();
-                                console.log('MediaPipe Pose初始化成功');
-                            } catch (initError) {
-                                console.error('Pose初始化失败:', initError);
-                                this.actionDisplay.textContent = 'Pose初始化失败: ' + initError.message;
-                                return;
-                            }
-
+                            console.log('Web Workers 初始化成功');
                             this.isCameraStarted = true;
                             this.isRecognizing = true;
-                            
-                            // 启动游戏循环
+
+                            this.detectPose();
                             gameLoop();
                             
-                            const processFrame = async () => {
-                                if (this.isRecognizing && this.videoElement.readyState >= 2) {
-                                    const width = this.videoElement.videoWidth;
-                                    const height = this.videoElement.videoHeight;
-                                    console.log('视频尺寸:', width, 'x', height);
-                                    await this.pose.send({image: this.videoElement});
-                                }
-                                requestAnimationFrame(processFrame);
-                            };
-                            processFrame();
-                            console.log('开始处理视频帧');
-
                         } catch (playError) {
                             console.error('视频播放失败:', playError);
                             this.actionDisplay.textContent = '视频播放失败';
@@ -1204,32 +1192,228 @@
                 }
             }
 
+            async initializeWorkers() {
+                // 等待视频元数据加载完成，获取正确的视频尺寸
+                if (!this.videoElement.videoWidth || !this.videoElement.videoHeight) {
+                    await new Promise((resolve) => {
+                        const checkSize = () => {
+                            if (this.videoElement.videoWidth && this.videoElement.videoHeight) {
+                                resolve();
+                            } else {
+                                setTimeout(checkSize, 100);
+                            }
+                        };
+                        checkSize();
+                    });
+                }
+
+                const videoWidth = this.videoElement.videoWidth;
+                const videoHeight = this.videoElement.videoHeight;
+                
+                // 设置Canvas尺寸
+                this.player1Canvas.width = videoWidth / 2;
+                this.player1Canvas.height = videoHeight;
+                this.player2Canvas.width = videoWidth / 2;
+                this.player2Canvas.height = videoHeight;
+                
+                // 创建并初始化两个Web Workers
+                for (let i = 1; i <= 2; i++) {
+                    console.log(`创建 Worker ${i}...`);
+                    this.workers[i] = new Worker(`pose-worker-${i}.js`, { type: 'module' });
+                    console.log(`Worker ${i} 创建成功，添加事件监听器...`);
+                    
+                    // 监听Worker消息
+                    this.workers[i].onmessage = (event) => {
+                        this.handleWorkerMessage(event, i);
+                    };
+                    
+                    this.workers[i].onerror = (error) => {
+                        console.error(`Worker ${i} 发生错误:`, error);
+                    };
+                    
+                    console.log(`发送 INITIALIZE 消息给 Worker ${i}...`);
+                    // 发送初始化消息
+                    this.workers[i].postMessage({ 
+                        type: 'INITIALIZE', 
+                        playerIndex: i,
+                        videoWidth: videoWidth / 2,
+                        videoHeight: videoHeight
+                    });
+                }
+                
+                console.log('等待 Workers 初始化完成...');
+                await new Promise((resolve) => {
+                    const checkWorkers = () => {
+                        if (this.workerStates[1] && this.workerStates[2]) {
+                            resolve();
+                        } else {
+                            setTimeout(checkWorkers, 100);
+                        }
+                    };
+                    checkWorkers();
+                });
+            }
+
+            handleWorkerMessage(event, playerIndex) {
+                const { type, results, error, playerIndex: eventPlayerIndex } = event.data;
+                
+                // 使用事件中的playerIndex，如果没有则使用传入的playerIndex
+                const actualPlayerIndex = eventPlayerIndex || playerIndex;
+                
+                switch (type) {
+                    case 'INITIALIZED':
+                        console.log(`Worker ${actualPlayerIndex} 初始化完成`);
+                        this.workerStates[actualPlayerIndex] = true;
+                        break;
+                    case 'POSE_RESULTS':
+                        if (results && results.poseLandmarks) {
+                            this.processPoseResults(results, actualPlayerIndex);
+                        }
+                        break;
+                    case 'ERROR':
+                        console.error(`Worker ${actualPlayerIndex} 错误:`, error);
+                        break;
+                }
+            }
+
+            async detectPose() {
+                if (!this.isRecognizing || !this.videoElement) return;
+
+                try {
+                    if (this.videoElement.readyState >= 2) {
+                        const videoWidth = this.videoElement.videoWidth;
+                        const videoHeight = this.videoElement.videoHeight;
+                        
+                        // 复制视频帧到两个Canvas
+                        this.player1Ctx.drawImage(this.videoElement, 0, 0, videoWidth / 2, videoHeight, 0, 0, videoWidth / 2, videoHeight);
+                        this.player2Ctx.drawImage(this.videoElement, videoWidth / 2, 0, videoWidth / 2, videoHeight, 0, 0, videoWidth / 2, videoHeight);
+                        
+                        // 获取ImageData
+                        const image1Data = this.player1Ctx.getImageData(0, 0, videoWidth / 2, videoHeight);
+                        const image2Data = this.player2Ctx.getImageData(0, 0, videoWidth / 2, videoHeight);
+                        
+                        // 发送帧到Workers
+                        this.workers[1].postMessage({ 
+                            type: 'PROCESS_FRAME', 
+                            data: image1Data, 
+                            playerIndex: 1,
+                            width: videoWidth / 2,
+                            height: videoHeight
+                        });
+                        this.workers[2].postMessage({ 
+                            type: 'PROCESS_FRAME', 
+                            data: image2Data, 
+                            playerIndex: 2,
+                            width: videoWidth / 2,
+                            height: videoHeight
+                        });
+                    }
+                } catch (error) {
+                    console.error('姿态检测错误:', error);
+                }
+
+                requestAnimationFrame(() => this.detectPose());
+            }
+
+            processPoseResults(results, playerIndex) {
+                // 存储姿态结果
+                this.playerPoses[playerIndex] = results;
+                
+                // 添加到历史记录
+                this.poseHistory[playerIndex].push(results);
+                if (this.poseHistory[playerIndex].length > this.maxPoseHistory) {
+                    this.poseHistory[playerIndex].shift();
+                }
+                
+                // 更新玩家动作
+                this.updatePlayerAction(playerIndex, results.poseLandmarks);
+            }
+
+            analyzeAction(results, playerIndex) {
+                if (!results || !results.poseLandmarks) {
+                    return "未检测到人";
+                }
+                
+                const landmarks = results.poseLandmarks;
+                return this.recognizeActionForPlayer(landmarks, this.selfieMode);
+            }
+
+            getStableAction(history) {
+                if (history.length < this.maxActionHistory) return null;
+                
+                // 检查是否所有动作都相同
+                const firstAction = history[0];
+                const allSame = history.every(action => action === firstAction);
+                
+                return allSame ? firstAction : null;
+            }
+
             onPoseResults(results) {
-                // 绘制姿态轨迹到canvas
                 this.drawPoseResults(results);
 
-                // 调试：打印检测结果
-                const multiCount = results.multiPoseLandmarks ? results.multiPoseLandmarks.length : 0;
-                const singleCount = results.poseLandmarks ? 1 : 0;
-                console.log('检测结果 - multiPoseLandmarks:', multiCount, 'poseLandmarks:', singleCount);
+                let currentPose = null;
 
-                // 检查多人检测结果
-                if (results.multiPoseLandmarks && results.multiPoseLandmarks.length > 0) {
-                    // 多人模式：results.multiPoseLandmarks 是数组
-                    this.processMultiplePoses(results.multiPoseLandmarks);
-                } else if (results.poseLandmarks) {
-                    // 单人模式：results.poseLandmarks 是单个对象
-                    // 对于单人模式，将其分配给玩家1
-                    this.updatePlayerAction(1, results.poseLandmarks);
-                    // 清空其他玩家的动作
-                    for (let i = 2; i <= 2; i++) {
-                        this.clearPlayerAction(i);
+                // 获取当前检测到的姿态
+                if (results.poseLandmarks) {
+                    currentPose = results.poseLandmarks;
+                }
+
+                if (currentPose && currentPose[0]) {
+                    // 根据当前检测方向调整姿态坐标
+                    const adjustedPose = currentPose.map(landmark => {
+                        if (!landmark) return landmark;
+                        
+                        // 复制原始坐标
+                        const adjusted = { ...landmark };
+                        
+                        // 如果是检测右半部分，需要调整X坐标
+                        if (this.detectionSide === 'right') {
+                            adjusted.x = 0.5 + (adjusted.x / 2);
+                        } else {
+                            // 检测左半部分，X坐标范围是 0-0.5
+                            adjusted.x = adjusted.x / 2;
+                        }
+                        
+                        return adjusted;
+                    });
+
+                    // 确定玩家编号 - 考虑selfieMode的镜像效果
+                    const noseX = adjustedPose[0].x;
+                    // 由于selfieMode为true，视频已经被镜像，所以需要反向映射：
+                    // 视频左边（noseX < 0.5）对应真实世界的右边，应该控制玩家2
+                    // 视频右边（noseX >= 0.5）对应真实世界的左边，应该控制玩家1
+                    const playerIndex = noseX < 0.5 ? 2 : 1;
+
+                    // 存储调整后的姿态到对应玩家
+                    // 添加姿态历史记录，用于平滑处理
+                    this.poseHistory[playerIndex].push(adjustedPose);
+                    if (this.poseHistory[playerIndex].length > this.maxPoseHistory) {
+                        this.poseHistory[playerIndex].shift();
                     }
+                    
+                    // 应用平滑处理
+                    const smoothedPose = this.smoothPose(this.poseHistory[playerIndex]);
+                    this.playerPoses[playerIndex] = smoothedPose;
+                }
+
+                console.log('检测结果:', {
+                    currentPose: currentPose ? 1 : 0,
+                    player1: this.playerPoses[1] ? 1 : 0,
+                    player2: this.playerPoses[2] ? 1 : 0,
+                    detectionSide: this.detectionSide
+                });
+
+                // 处理两个玩家的动作
+                if (this.playerPoses[1]) {
+                    this.updatePlayerAction(1, this.playerPoses[1]);
                 } else {
-                    // 没有检测到任何人，清空所有玩家的动作
-                    for (let i = 1; i <= 2; i++) {
-                        this.clearPlayerAction(i);
-                    }
+                    this.clearPlayerAction(1);
+                }
+
+                if (this.playerPoses[2]) {
+                    this.updatePlayerAction(2, this.playerPoses[2]);
+                } else {
+                    this.clearPlayerAction(2);
                 }
             }
 
@@ -1251,17 +1435,17 @@
                 // 绘制颜色方案 - 玩家1红色，玩家2蓝色
                 const colors = ['red', 'blue', 'green', 'yellow'];
 
-                const landmarks = results.multiPoseLandmarks || (results.poseLandmarks ? [results.poseLandmarks] : []);
+                // 显示两个玩家的姿态
+                const posesToDraw = [];
+                if (this.playerPoses[1]) posesToDraw.push({pose: this.playerPoses[1], playerIndex: 1});
+                if (this.playerPoses[2]) posesToDraw.push({pose: this.playerPoses[2], playerIndex: 2});
 
-                landmarks.forEach((pose, index) => {
+                posesToDraw.forEach(({pose, playerIndex}) => {
                     if (!pose) return;
 
-                    // 根据X坐标确定颜色
-                    const noseX = pose[0].x;
-                    const playerIndex = noseX < 0.5 ? 1 : 2;
                     const color = colors[playerIndex - 1] || colors[0];
 
-                    // 绘制骨架连接
+                    // Pose 33个关键点连接
                     const connections = [
                         [0, 1], [1, 2], [2, 3], [3, 7], [1, 4], [4, 5], [5, 6], [6, 8],
                         [9, 10], [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19],
@@ -1293,7 +1477,7 @@
                     });
 
                     // 显示玩家编号
-                    ctx.fillStyle = color;
+                    ctx.fillStyle = 'white';
                     ctx.font = 'bold 16px Arial';
                     ctx.fillText(`P${playerIndex}`, getX(pose[0].x), (pose[0].y * canvas.height) - 10);
                 });
@@ -1301,7 +1485,7 @@
                 // 显示检测到的人数
                 ctx.fillStyle = 'white';
                 ctx.font = 'bold 14px Arial';
-                ctx.fillText(`检测到 ${landmarks.length} 人`, 5, 15);
+                ctx.fillText(`检测到 ${posesToDraw.length} 人`, 5, 15);
             }
 
             processMultiplePoses(poses) {
@@ -1339,65 +1523,84 @@
                 // 为特定玩家更新动作
                 const action = this.recognizeActionForPlayer(landmarks, this.selfieMode);
                 
-                // 找到对应的玩家
-                const player = players.find(p => p.id === playerIndex);
-                if (player) {
-                    // 更新玩家的动作状态
-                    player.currentAction = action;
- 
+                // 添加动作到历史记录
+                this.actionHistory[playerIndex].push(action);
+                if (this.actionHistory[playerIndex].length > this.maxActionHistory) {
+                    this.actionHistory[playerIndex].shift();
+                }
+                
+                // 检查动作稳定性：只有当动作在历史记录中占大多数时才更新
+                const actionCounts = {};
+                for (const histAction of this.actionHistory[playerIndex]) {
+                    actionCounts[histAction] = (actionCounts[histAction] || 0) + 1;
+                }
+                
+                let mostFrequentAction = action;
+                let maxCount = 1;
+                for (const [act, count] of Object.entries(actionCounts)) {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        mostFrequentAction = act;
+                    }
+                }
+                
+                // 只有当动作稳定时才更新
+                if (maxCount >= 2) { // 需要至少2次相同动作才认为是稳定的
+                    this.playerActions[playerIndex] = mostFrequentAction;
                     
-                    // 显示动作到对应的玩家区域
-                    const actionDisplay = document.getElementById(`action-display-${playerIndex}`);
-                    if (actionDisplay) {
-                        // 如果游戏未运行，显示"举起右手开始"
-                        if (!player.gameRunning) {
-                            actionDisplay.textContent = "举起右手开始";
-                        } else {
-                            // 游戏运行中，显示实际动作
-                            actionDisplay.textContent = action;
+                    // 找到对应的玩家
+                    const player = players.find(p => p.id === playerIndex);
+                    if (player) {
+                        // 更新玩家的动作状态
+                        player.currentAction = mostFrequentAction;
+             
+                        
+                        // 显示动作到对应的玩家区域
+                        const actionDisplay = document.getElementById(`action-display-${playerIndex}`);
+                        if (actionDisplay) {
+                            // 如果游戏未运行，显示"举起右手开始"
+                            if (!player.gameRunning) {
+                                actionDisplay.textContent = "举起右手开始";
+                            } else {
+                                // 游戏运行中，显示实际动作
+                                actionDisplay.textContent = mostFrequentAction;
+                            }
                         }
-                    }
-                    
-                    // 根据动作更新表情，只有当没有碰撞表情切换时才更新
-                    if (player.expressionImage && !player.isCollisionExpression) {
-                        if (player.currentAction === "举起双手" ||player.currentAction === "双手举起"||player.currentAction === "双手上举") {
-                            player.expressionImage.src = expressions.handup;
-                        } else if (player.currentAction === "跳起来") {
-                            player.expressionImage.src = expressions.fly;
-                        // } else if (player.currentAction === "双手抱头") {
-                        //     player.expressionImage.src = expressions.danger;
-                        } else if (player.currentAction === "张开双手") {
-                            player.expressionImage.src = expressions.danger;
-                        } else {
-                            // 其他动作恢复默认表情
-                            player.expressionImage.src = expressions.default;
+                        
+                        // 根据动作更新表情，只有当没有碰撞表情切换时才更新
+                        if (player.expressionImage && !player.isCollisionExpression) {
+                            if (mostFrequentAction === "举起双手" || mostFrequentAction === "双手举起" || mostFrequentAction === "双手上举") {
+                                player.expressionImage.src = expressions.handup;
+                            } else if (mostFrequentAction === "跳起来") {
+                                player.expressionImage.src = expressions.fly;
+                            } else if (mostFrequentAction === "张开双手") {
+                                player.expressionImage.src = expressions.danger;
+                            } else {
+                                // 其他动作恢复默认表情
+                                player.expressionImage.src = expressions.default;
+                            }
                         }
-                    }
-                    
-                    // 游戏开始判断：如果玩家举起右手且游戏未运行，则启动该玩家的游戏
-                    if (action === "举起右手" && !player.gameRunning) {
-                        togglePlayerGame(playerIndex);
-                    }
-                    
-                    // 举起左手的判断暂时保留，但是不响应任何逻辑
-                    // if (action === "左手举起" && player.gameRunning) {
-                    //     togglePlayerGame(playerIndex);
-                    // }
-                    
-                    // 跳跃逻辑：只针对当前玩家
-                    if (action === "跳起来" && !isJumpDisabled) {
-                        const character = player.character;
-                        if (character && !character.classList.contains('jumping') && !character.classList.contains('jump-cooling')) {
-                            character.classList.add('jumping');
-                            character.style.transform = 'translateY(-120px)';
-                            setTimeout(() => {
-                                character.style.transform = 'translateY(0)';
-                                character.classList.remove('jumping');
-                                character.classList.add('jump-cooling');
+                        
+                        // 游戏开始判断：如果玩家举起右手且游戏未运行，则启动该玩家的游戏
+                        if (mostFrequentAction === "举起右手" && !player.gameRunning) {
+                            togglePlayerGame(playerIndex);
+                        }
+                        
+                        // 跳跃逻辑：只针对当前玩家
+                        if (mostFrequentAction === "跳起来" && !isJumpDisabled) {
+                            const character = player.character;
+                            if (character && !character.classList.contains('jumping') && !character.classList.contains('jump-cooling')) {
+                                character.classList.add('jumping');
+                                character.style.transform = 'translateY(-120px)';
                                 setTimeout(() => {
-                                    character.classList.remove('jump-cooling');
+                                    character.style.transform = 'translateY(0)';
+                                    character.classList.remove('jumping');
+                                    character.classList.add('jump-cooling');
+                                    setTimeout(() => {
+                                        character.classList.remove('jump-cooling');
+                                    }, 2000);
                                 }, 2000);
-                            }, 2000);
+                            }
                         }
                     }
                 }
@@ -1465,13 +1668,33 @@
                 // 检测跳跃
                 let isJumping = false;
                 if (useUpperBodyJumpDetection) {
-                    // 基于上半身的跳跃判断 - 降低阈值以减少误判
+                    // 基于上半身的跳跃判断 - 优化阈值以提高准确性
                     const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
-                    isJumping = upperBodyY < 0.25;
+                    const headY = nose.y;
+                    
+                    // 更严格的跳跃判断条件：
+                    // 1. 上半身整体明显上升（Y坐标较小）
+                    // 2. 头部位置明显高于正常站立位置
+                    // 3. 结合头部位置的变化趋势
+                    const isUpperBodyRaised = upperBodyY < 0.3;
+                    const isHeadRaised = headY < 0.25;
+                    
+                    // 计算头部位置变化趋势（如果有历史数据）
+                    let isHeadMovingUp = false;
+                    if (this.headPositionHistory.length > 2) {
+                        const recentHistory = this.headPositionHistory.slice(-3);
+                        const firstY = recentHistory[0].y;
+                        const lastY = recentHistory[recentHistory.length - 1].y;
+                        // 头部位置下降（Y坐标减小）表示向上移动
+                        isHeadMovingUp = lastY < firstY - 0.05;
+                    }
+                    
+                    // 综合判断：需要满足多个条件才判断为跳跃
+                    isJumping = (isUpperBodyRaised && isHeadRaised) || (isHeadMovingUp && isHeadRaised);
                 } else {
                     // 基于下半身的跳跃判断（默认）
                     const hipY = (leftHip.y + rightHip.y) / 2;
-                    isJumping = hipY < 0.3;
+                    isJumping = hipY < 0.35;
                 }
 
                 // 简单的动作检测逻辑
@@ -1505,6 +1728,53 @@
                         this.headPositionHistory.shift();
                     }
                 }
+            }
+
+            // 平滑姿态数据，减少跳动，同时保持准确性
+            smoothPose(poseHistory) {
+                if (!poseHistory || poseHistory.length === 0) return null;
+                if (poseHistory.length === 1) return poseHistory[0];
+                
+                const smoothedPose = [];
+                const landmarkCount = poseHistory[0].length;
+                
+                // 计算权重：最近的姿态权重更高
+                const weights = [];
+                let totalWeight = 0;
+                for (let i = 0; i < poseHistory.length; i++) {
+                    const weight = i + 1; // 越近的姿态权重越高
+                    weights.push(weight);
+                    totalWeight += weight;
+                }
+                
+                for (let i = 0; i < landmarkCount; i++) {
+                    let weightedSumX = 0;
+                    let weightedSumY = 0;
+                    let weightedSumZ = 0;
+                    let totalWeightForLandmark = 0;
+                    
+                    for (let j = 0; j < poseHistory.length; j++) {
+                        if (poseHistory[j][i]) {
+                            const weight = weights[j];
+                            weightedSumX += poseHistory[j][i].x * weight;
+                            weightedSumY += poseHistory[j][i].y * weight;
+                            weightedSumZ += (poseHistory[j][i].z || 0) * weight;
+                            totalWeightForLandmark += weight;
+                        }
+                    }
+                    
+                    if (totalWeightForLandmark > 0) {
+                        smoothedPose[i] = {
+                            x: weightedSumX / totalWeightForLandmark,
+                            y: weightedSumY / totalWeightForLandmark,
+                            z: weightedSumZ / totalWeightForLandmark
+                        };
+                    } else {
+                        smoothedPose[i] = null;
+                    }
+                }
+                
+                return smoothedPose;
             }
 
             updateVerticalPositionHistory(landmarks) {
@@ -1878,7 +2148,7 @@
                 type: Math.random() > 0.5 ? 'gold' : 'stone',
                 x: characterCenterX + (Math.random() * horizontalRange - horizontalRange / 0.9 ),
                 y: -relativeUnit * 4,
-                speed: Math.random() * relativeUnit * 0.6 + relativeUnit * 0.6,
+                speed: Math.random() * relativeUnit * 0.1 + relativeUnit * 0.3,
                 // speed: Math.random() * relativeUnit * 0.6  ,
                 originalSpeed: 0,
                 element: null

@@ -9,11 +9,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=no">
-    <title>金元宝和石头 - 2人版</title>
+    <title>金元宝和石头 - 2人新版</title>
+    <script src="mediapipe/pose/pose.js"></script>
     <script src="mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="mediapipe/control_utils/control_utils.js"></script>
     <script src="mediapipe/drawing_utils/drawing_utils.js"></script>
-    <script src="mediapipe/pose.js"></script>l
     <script>
         // 表情图片对象   
         const expressions = {
@@ -466,7 +465,7 @@
             position: absolute;
             top: 50px;
             right: 20px;
-            width: 360px;
+            width: 460px;
             height: 220px;
             background: #000;
             border-radius: 5px;
@@ -1074,14 +1073,19 @@
 
                     console.log('正在请求摄像头权限');
                     let stream;
+                    const targetDeviceId = 'a2be98a3f79897409d61fc3117392fb1186effd1576e756e12dd55999a67a977';
+                    console.log('目标摄像头设备ID:', targetDeviceId);
+                    
                     try {
                         stream = await navigator.mediaDevices.getUserMedia({
                             video: {
+                                deviceId: { exact: targetDeviceId },
                                 width: { ideal: 640 },
                                 height: { ideal: 480 }
                             },
                             audio: false
                         });
+                        console.log('使用指定设备ID获取摄像头成功');
                     } catch (mediaError) {
                         console.error('getUserMedia失败:', mediaError.name, mediaError.message);
                         console.error('错误详情:', mediaError);
@@ -1094,14 +1098,16 @@
                         if (mediaError.name === 'NotAllowedError') {
                             throw new Error('摄像头权限被拒绝，请在浏览器设置中允许摄像头访问');
                         } else if (mediaError.name === 'NotFoundError') {
-                            throw new Error('找不到摄像头设备');
+                            throw new Error('找不到指定的摄像头设备，请检查设备ID是否正确');
                         } else if (mediaError.name === 'NotReadableError') {
                             throw new Error('摄像头被其他应用占用');
                         } else if (mediaError.name === 'OverconstrainedError') {
-                            // 尝试使用默认设置
-                            console.log('尝试使用默认摄像头设置');
+                            // 尝试使用指定的deviceId但不设置约束
+                            console.log('指定的摄像头不支持约束，尝试使用默认设置');
                             stream = await navigator.mediaDevices.getUserMedia({
-                                video: true,
+                                video: {
+                                    deviceId: targetDeviceId
+                                },
                                 audio: false
                             });
                         } else {
@@ -1123,66 +1129,50 @@
                             this.actionDisplay.textContent = '摄像头已就绪';
 
                             console.log('开始初始化MediaPipe Pose');
-                            // 检测是否为移动端
-                            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                            console.log('是否为移动端:', isMobile);
-                            
-                            this.isMobile = isMobile; // 保存设备类型供后续使用
-                            
-                            console.log('创建Pose实例，使用本地文件路径');
-                            this.pose = new Pose({
-                                locateFile: (file) => {
-                                    const filePath = `mediapipe/${file}`;
-                                    console.log('加载文件:', filePath);
-                                    return filePath;
-                                },
-                                multiPose: true
-                            });
-                            
-                            console.log('Pose实例创建成功，开始设置选项');
-                            
-
-                            this.pose.setOptions({
-                                modelComplexity: 1,
-                                smoothLandmarks: true,
-                                enableSegmentation: false,
-                                smoothSegmentation: false,
-                                minDetectionConfidence: 0.1,
-                                minTrackingConfidence: 0.1,
-                                selfieMode: false,
-                                maxNumPoses: 4
-                            });
-                            this.selfieMode = false;
-
-                            this.pose.onResults((results) => this.onPoseResults(results));
 
                             try {
-                                console.log('开始初始化Pose模型...');
+                                this.pose = new Pose({
+                                    locateFile: (file) => {
+                                        return `mediapipe/${file}`;
+                                    }
+                                });
+
+                                this.pose.setOptions({
+                                    modelComplexity: 1,
+                                    smoothLandmarks: true,
+                                    enableSegmentation: false,
+                                    smoothSegmentation: false,
+                                    minDetectionConfidence: 0.3,
+                                    minTrackingConfidence: 0.3,
+                                    selfieMode: false,
+                                    maxNumPoses: 2
+                                });
+                                this.selfieMode = false;
+                                
+                                // 用于时间切片检测的变量
+                                this.detectionSide = 'left'; // 'left' 或 'right'
+                                this.playerPoses = {1: null, 2: null}; // 存储两个玩家的姿态
+                                this.lastDetectionTime = 0; // 上次检测时间
+                                this.detectionInterval = 200; // 检测间隔（毫秒）
+
+                                this.pose.onResults((results) => {
+                                    this.onPoseResults(results);
+                                });
+
                                 await this.pose.initialize();
-                                console.log('MediaPipe Pose初始化成功');
+                                console.log('MediaPipe Pose 初始化成功');
+                                this.isCameraStarted = true;
+                                this.isRecognizing = true;
+
+                                this.detectPose();
+
+                                gameLoop();
+                                
                             } catch (initError) {
-                                console.error('Pose初始化失败:', initError);
-                                this.actionDisplay.textContent = 'Pose初始化失败: ' + initError.message;
+                                console.error('MediaPipe Pose 初始化失败:', initError);
+                                this.actionDisplay.textContent = 'MediaPipe Pose 初始化失败: ' + initError.message;
                                 return;
                             }
-
-                            this.isCameraStarted = true;
-                            this.isRecognizing = true;
-                            
-                            // 启动游戏循环
-                            gameLoop();
-                            
-                            const processFrame = async () => {
-                                if (this.isRecognizing && this.videoElement.readyState >= 2) {
-                                    const width = this.videoElement.videoWidth;
-                                    const height = this.videoElement.videoHeight;
-                                    console.log('视频尺寸:', width, 'x', height);
-                                    await this.pose.send({image: this.videoElement});
-                                }
-                                requestAnimationFrame(processFrame);
-                            };
-                            processFrame();
-                            console.log('开始处理视频帧');
 
                         } catch (playError) {
                             console.error('视频播放失败:', playError);
@@ -1204,32 +1194,102 @@
                 }
             }
 
+            async detectPose() {
+                if (!this.isRecognizing || !this.videoElement) return;
+
+                try {
+                    if (this.videoElement.readyState >= 2) {
+                        const currentTime = performance.now();
+                        
+                        // 每隔一定时间交替检测方向
+                        if (currentTime - this.lastDetectionTime > this.detectionInterval) {
+                            this.detectionSide = this.detectionSide === 'left' ? 'right' : 'left';
+                            this.lastDetectionTime = currentTime;
+                        }
+
+                        // 创建一个临时 Canvas 来裁剪视频
+                        const canvas = document.createElement('canvas');
+                        canvas.width = this.videoElement.videoWidth || 640;
+                        canvas.height = this.videoElement.videoHeight || 480;
+                        const ctx = canvas.getContext('2d');
+
+                        // 根据当前检测方向裁剪视频
+                        if (this.detectionSide === 'left') {
+                            // 只绘制左半部分
+                            ctx.drawImage(this.videoElement, 0, 0, canvas.width / 2, canvas.height, 0, 0, canvas.width, canvas.height);
+                        } else {
+                            // 只绘制右半部分
+                            ctx.drawImage(this.videoElement, canvas.width / 2, 0, canvas.width / 2, canvas.height, 0, 0, canvas.width, canvas.height);
+                        }
+
+                        // 发送裁剪后的图像到 MediaPipe
+                        await this.pose.send({ image: canvas });
+                    }
+                } catch (error) {
+                    console.error('姿态检测错误:', error);
+                }
+
+                requestAnimationFrame(() => this.detectPose());
+            }
+
             onPoseResults(results) {
-                // 绘制姿态轨迹到canvas
                 this.drawPoseResults(results);
 
-                // 调试：打印检测结果
-                const multiCount = results.multiPoseLandmarks ? results.multiPoseLandmarks.length : 0;
-                const singleCount = results.poseLandmarks ? 1 : 0;
-                console.log('检测结果 - multiPoseLandmarks:', multiCount, 'poseLandmarks:', singleCount);
+                let currentPose = null;
 
-                // 检查多人检测结果
-                if (results.multiPoseLandmarks && results.multiPoseLandmarks.length > 0) {
-                    // 多人模式：results.multiPoseLandmarks 是数组
-                    this.processMultiplePoses(results.multiPoseLandmarks);
-                } else if (results.poseLandmarks) {
-                    // 单人模式：results.poseLandmarks 是单个对象
-                    // 对于单人模式，将其分配给玩家1
-                    this.updatePlayerAction(1, results.poseLandmarks);
-                    // 清空其他玩家的动作
-                    for (let i = 2; i <= 2; i++) {
-                        this.clearPlayerAction(i);
-                    }
+                // 获取当前检测到的姿态
+                if (results.poseLandmarks) {
+                    currentPose = results.poseLandmarks;
+                }
+
+                if (currentPose && currentPose[0]) {
+                    // 根据当前检测方向调整姿态坐标
+                    const adjustedPose = currentPose.map(landmark => {
+                        if (!landmark) return landmark;
+                        
+                        // 复制原始坐标
+                        const adjusted = { ...landmark };
+                        
+                        // 如果是检测右半部分，需要调整X坐标
+                        if (this.detectionSide === 'right') {
+                            adjusted.x = 0.5 + (adjusted.x / 2);
+                        } else {
+                            // 检测左半部分，X坐标范围是 0-0.5
+                            adjusted.x = adjusted.x / 2;
+                        }
+                        
+                        return adjusted;
+                    });
+
+                    // 确定玩家编号 - 考虑selfieMode的镜像效果
+                    const noseX = adjustedPose[0].x;
+                    // 由于selfieMode为true，视频已经被镜像，所以需要反向映射：
+                    // 视频左边（noseX < 0.5）对应真实世界的右边，应该控制玩家2
+                    // 视频右边（noseX >= 0.5）对应真实世界的左边，应该控制玩家1
+                    const playerIndex = noseX < 0.5 ? 2 : 1;
+
+                    // 存储调整后的姿态到对应玩家
+                    this.playerPoses[playerIndex] = adjustedPose;
+                }
+
+                console.log('检测结果:', {
+                    currentPose: currentPose ? 1 : 0,
+                    player1: this.playerPoses[1] ? 1 : 0,
+                    player2: this.playerPoses[2] ? 1 : 0,
+                    detectionSide: this.detectionSide
+                });
+
+                // 处理两个玩家的动作
+                if (this.playerPoses[1]) {
+                    this.updatePlayerAction(1, this.playerPoses[1]);
                 } else {
-                    // 没有检测到任何人，清空所有玩家的动作
-                    for (let i = 1; i <= 2; i++) {
-                        this.clearPlayerAction(i);
-                    }
+                    this.clearPlayerAction(1);
+                }
+
+                if (this.playerPoses[2]) {
+                    this.updatePlayerAction(2, this.playerPoses[2]);
+                } else {
+                    this.clearPlayerAction(2);
                 }
             }
 
@@ -1251,17 +1311,17 @@
                 // 绘制颜色方案 - 玩家1红色，玩家2蓝色
                 const colors = ['red', 'blue', 'green', 'yellow'];
 
-                const landmarks = results.multiPoseLandmarks || (results.poseLandmarks ? [results.poseLandmarks] : []);
+                // 显示两个玩家的姿态
+                const posesToDraw = [];
+                if (this.playerPoses[1]) posesToDraw.push({pose: this.playerPoses[1], playerIndex: 1});
+                if (this.playerPoses[2]) posesToDraw.push({pose: this.playerPoses[2], playerIndex: 2});
 
-                landmarks.forEach((pose, index) => {
+                posesToDraw.forEach(({pose, playerIndex}) => {
                     if (!pose) return;
 
-                    // 根据X坐标确定颜色
-                    const noseX = pose[0].x;
-                    const playerIndex = noseX < 0.5 ? 1 : 2;
                     const color = colors[playerIndex - 1] || colors[0];
 
-                    // 绘制骨架连接
+                    // Pose 33个关键点连接
                     const connections = [
                         [0, 1], [1, 2], [2, 3], [3, 7], [1, 4], [4, 5], [5, 6], [6, 8],
                         [9, 10], [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19],
@@ -1293,7 +1353,7 @@
                     });
 
                     // 显示玩家编号
-                    ctx.fillStyle = color;
+                    ctx.fillStyle = 'white';
                     ctx.font = 'bold 16px Arial';
                     ctx.fillText(`P${playerIndex}`, getX(pose[0].x), (pose[0].y * canvas.height) - 10);
                 });
@@ -1301,7 +1361,7 @@
                 // 显示检测到的人数
                 ctx.fillStyle = 'white';
                 ctx.font = 'bold 14px Arial';
-                ctx.fillText(`检测到 ${landmarks.length} 人`, 5, 15);
+                ctx.fillText(`检测到 ${posesToDraw.length} 人`, 5, 15);
             }
 
             processMultiplePoses(poses) {
@@ -1465,13 +1525,17 @@
                 // 检测跳跃
                 let isJumping = false;
                 if (useUpperBodyJumpDetection) {
-                    // 基于上半身的跳跃判断 - 降低阈值以减少误判
+                    // 基于上半身的跳跃判断 - 优化阈值以提高检测灵敏度
                     const upperBodyY = (nose.y + leftShoulder.y + rightShoulder.y) / 3;
-                    isJumping = upperBodyY < 0.25;
+                    // 提高阈值，使跳跃更容易被检测到
+                    // 同时考虑头部位置作为辅助判断
+                    const headY = nose.y;
+                    // 综合判断：上半身整体上升且头部位置较高
+                    isJumping = upperBodyY < 0.35 || (headY < 0.3 && upperBodyY < 0.4);
                 } else {
                     // 基于下半身的跳跃判断（默认）
                     const hipY = (leftHip.y + rightHip.y) / 2;
-                    isJumping = hipY < 0.3;
+                    isJumping = hipY < 0.4;
                 }
 
                 // 简单的动作检测逻辑
@@ -1878,7 +1942,7 @@
                 type: Math.random() > 0.5 ? 'gold' : 'stone',
                 x: characterCenterX + (Math.random() * horizontalRange - horizontalRange / 0.9 ),
                 y: -relativeUnit * 4,
-                speed: Math.random() * relativeUnit * 0.6 + relativeUnit * 0.6,
+                speed: Math.random() * relativeUnit * 0.1 + relativeUnit * 0.3,
                 // speed: Math.random() * relativeUnit * 0.6  ,
                 originalSpeed: 0,
                 element: null

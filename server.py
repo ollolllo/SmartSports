@@ -9,6 +9,12 @@ class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         super().end_headers()
 
+    def guess_type(self, path):
+        base, ext = os.path.splitext(path)
+        if ext == '.tflite':
+            return 'application/octet-stream'
+        return super().guess_type(path)
+
 os.chdir('d:\\projects\\AI自习室\\SmartSports')
 
 PORT = 3000
