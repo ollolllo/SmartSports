@@ -7,11 +7,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # 构建产物
-dist/
-dist_new/
-dist_new2/
-dist_new3/
-build/
+dist*/
 
 # 环境变量文件
 .env
