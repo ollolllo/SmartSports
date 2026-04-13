@@ -8,6 +8,9 @@ lerna-debug.log*
 
 # 构建产物
 dist/
+dist_new/
+dist_new2/
+dist_new3/
 build/
 
 # 环境变量文件
