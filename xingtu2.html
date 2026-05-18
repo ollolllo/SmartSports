@@ -1,0 +1,2705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="screen-orientation" content="landscape">
+    <meta name="x5-orientation" content="landscape">
+    <meta name="x5-fullscreen" content="true">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>星途 WeGoing</title>
+    <script src="mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="mediapipe/control_utils/control_utils.js"></script>
+    <script src="mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="mediapipe/pose.js"></script>
+    <script>
+        window.ENABLE_GAME_LOG = false;
+
+        if (!window.ENABLE_GAME_LOG) {
+            console.log = function () {};
+            console.debug = function () {};
+        }
+    </script>
+    <script src="common/mediapipe_action_manager.js"></script>
+    <link rel="stylesheet" href="common/game-ranking.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        
+        /* 使用dvh单位确保在移动端浏览器工具栏显示时也能完整显示 */
+        @supports (height: 100dvh) {
+            body {
+                height: 100dvh;
+            }
+        }
+        
+        /* 横屏适配 */
+        @media screen and (orientation: portrait) {
+            .game-container {
+                min-height: 400px;
+            }
+        }
+
+        .game-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: radial-gradient(circle, #0a0a23 0%, #1a1a40 50%, #0a0a23 100%);
+            overflow: hidden;
+        }
+        
+        /* 轨道样式 */
+        .orbit {
+            position: absolute;
+            border: 1px solid rgba(255,255,255,0.5);
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        /* 星球样式 */
+        .planet {
+            position: absolute;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            z-index: 2;
+        }
+        
+        /* 星星样式 */
+        .star {
+            position: absolute;
+            background-color: #fff;
+            border-radius: 50%;
+            animation: twinkle 3s infinite;
+        }
+        
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+        
+        /* 游戏UI样式 */
+        .game-ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            gap: 20px;
+            z-index: 20;
+        }
+        
+        .score-info, .gem-info {
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .score-value, .gem-value, .gem-count {
+            color: #ffd700;
+        }
+        
+        /* 使用dvh单位确保在移动端浏览器工具栏显示时也能完整显示 */
+        @supports (height: 100dvh) {
+            .game-container {
+                height: 100dvh;
+            }
+        }
+        
+        .game-title {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: clamp(16px, 3vw, 24px);
+            font-weight: bold;
+            color: #333;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            z-index: 20;
+            margin: 0;
+            white-space: nowrap;
+        }
+        
+        /* 玩家区域容器 - 全屏横向排列 */
+        .players-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+        
+        .player-area {
+            position: relative;
+            width: 30%;
+            flex: 0 0 30%;
+            height: 100%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            background-color: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 10px;
+            z-index: 5;
+        }
+        
+        .player-title {
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 10px;
+            border-radius: 10px;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-avatar {
+            width: 110px;
+            height: 130px;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            min-width: 80px;
+            min-height: 80px;
+            margin-bottom: 5px;
+            background-color: #ddd;
+            position: relative;
+            z-index: 10;
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            font-family: 'Microsoft YaHei', sans-serif;
+            font-size: 24px;
+            margin-bottom: 10px;
+            min-height: 30px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .player-name {
+            font-weight: bold;
+            color: yellow;
+        }
+
+        /* 确保player-score样式优先级 */
+        .player-info .player-score {
+            font-weight: bold;
+            color: red !important;
+            font-family: 'Microsoft YaHei', sans-serif !important;
+            font-size: 24px !important;
+        }
+
+        /* 确保score-display样式优先级 */
+        .player-info #score-display-1,
+        .player-info #score-display-2 {
+            font-weight: bold;
+            color: red !important;
+            font-family: 'Microsoft YaHei', sans-serif !important;
+            font-size: 24px !important;
+        }
+
+        .score-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: red;
+            white-space: nowrap;
+            text-align: center;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+
+        .score-change {
+            animation: score-animation 0.5s ease-out;
+        }
+
+        @keyframes score-animation {
+            0% {
+                transform: translateX(-50%) scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: translateX(-50%) scale(1.2);
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .action-display {
+            font-size: 12px;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 8px;
+            border-radius: 8px;
+            z-index: 20;
+            white-space: nowrap;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        /* 游戏开始时隐藏action-display */
+        .player-area.game-running .action-display {
+            display: none;
+        }
+
+        .game-area {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 10px;
+        }
+
+        .game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .character {
+            position: relative;
+            width: 15px;
+            height: 30px;
+            background-color: #ff9800;
+            border-radius: 5px 5px 0 0;
+            z-index: 10;
+        }
+        
+        .character::before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 10px solid #ff9800;
+        }
+        
+        .character::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 8px;
+            height: 15px;
+            background-color: #ff5722;
+            border-radius: 0 0 4px 4px;
+        }
+        
+        .character .flame {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 20px;
+            background: linear-gradient(to bottom, #ff5722, #ffeb3b);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: flame 0.5s infinite alternate;
+        }
+        
+        @keyframes flame {
+            0% {
+                height: 20px;
+                width: 12px;
+            }
+            100% {
+                height: 25px;
+                width: 10px;
+            }
+        }
+
+        .object {
+            position: absolute;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            z-index: 5;
+        }
+
+ 
+
+        .弹幕 {
+            position: absolute;
+            font-size: 2vw;
+            font-weight: bold;
+            color: #ff4500;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 20;
+            animation: float-up 2s ease-out forwards;
+        }
+
+        @keyframes float-up {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px);
+            }
+        }
+
+        /* 排名浮窗样式 */
+        #game-rankings {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            z-index: 1000;
+            min-width: 300px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .ranking-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ffd700;
+        }
+
+        .ranking-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 24px;
+        }
+
+        #close-ranking {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        #close-ranking:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .podium {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .podium-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .rank-1 {
+            background: linear-gradient(to top, #ffd700, #ffed4e);
+            height: 180px;
+            width: 100px;
+        }
+
+        .rank-2 {
+            background: linear-gradient(to top, #c0c0c0, #e8e8e8);
+            height: 140px;
+            width: 100px;
+        }
+
+        .rank-3 {
+            background: linear-gradient(to top, #cd7f32, #e6b422);
+            height: 100px;
+            width: 100px;
+        }
+
+        .rank-number {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .podium-step .player-avatar {
+            margin: 20px 0 10px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            overflow: hidden;
+            flex-shrink: 0;
+            min-width: 60px;
+            min-height: 60px;
+            max-width: 60px;
+            max-height: 60px;
+        }
+
+        /* 确保所有排名的头像都是正圆形 */
+        .podium-step.rank-1 .player-avatar,
+        .podium-step.rank-2 .player-avatar,
+        .podium-step.rank-3 .player-avatar {
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            overflow: hidden;
+            flex-shrink: 0;
+            min-width: 60px;
+            min-height: 60px;
+            max-width: 60px;
+            max-height: 60px;
+        }
+
+        .player-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .player-score {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .start-button {
+            position: absolute;
+            top: 50px;
+            left: 20px;
+            height: 36px;
+            padding: 0 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 9999;
+            min-width: 100px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            line-height: 36px;
+        }
+
+        .camera-container {
+            position: absolute;
+            top: 50px;
+            right: 20px;
+            width: 400px;
+            height: 220px;
+            background: #000;
+            border-radius: 5px;
+            overflow: hidden;
+            z-index: 20;
+        }
+
+        #camera {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        #pose-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            z-index: 100;
+        }
+
+        .action-display {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 100;
+        }
+
+        .start-button:hover {
+            background: #45a049;
+        }
+
+ 
+ 
+
+ 
+
+        /* 确保在所有屏幕尺寸上都能正常显示 */
+        @media (max-width: 1920px) {
+            .start-button {
+                font-size: 16px;
+                padding: 0 16px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .start-button {
+                font-size: 14px;
+                padding: 0 12px;
+            }
+            
+ 
+            
+            .game-title {
+                font-size: 4vw;
+            }
+            
+            .action-display {
+                font-size: 14px;
+                padding: 6px 12px;
+            }
+            
+            .camera-container {
+                width: 20vw;
+                height: 15vw;
+            }
+            
+            .players-container {
+                padding: 60px 10px 10px 10px;
+                gap: 10px;
+            }
+            
+            .character {
+                width: 40%;
+                height: 40%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            
+ 
+            
+            .弹幕 {
+                font-size: 3vw;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .start-button {
+                font-size: 12px;
+                padding: 0 10px;
+                height: 36px;
+                line-height: 36px;
+            }
+            
+ 
+            
+            .game-title {
+                font-size: 5vw;
+                top: 3%;
+            }
+            
+            .action-display {
+                font-size: 12px;
+                padding: 4px 10px;
+                top: 3%;
+            }
+            
+            .camera-container {
+                width: 25vw;
+                height: 18.75vw;
+                top: 3%;
+            }
+            
+            .players-container {
+                padding: 50px 5px 5px 5px;
+                gap: 5px;
+            }
+            
+            .player-title {
+                font-size: 10px;
+                padding: 1px 5px;
+            }
+            
+            .character {
+                width: 40%;
+                height: 40%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+            
+ 
+
+            .弹幕 {
+                font-size: 4vw;
+            }
+        }
+
+        /* 游戏倒计时 */
+        #game-timer {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 30px;
+            border-radius: 50px;
+            z-index: 1000;
+        }
+
+        #timer-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        /* 游戏排名浮窗 */
+        #game-rankings {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+            z-index: 1000;
+            min-width: 400px;
+            max-width: 700px;
+            width: 80%;
+        }
+
+        .ranking-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ffd700;
+        }
+
+        .ranking-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 28px;
+        }
+
+        #close-ranking {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        #close-ranking:hover {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .ranking-content {
+            font-size: 20px;
+        }
+
+        .ranking-footer {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #ffd700;
+            text-align: center;
+        }
+
+        .restart-hint {
+            font-size: 18px;
+            color: #333;
+        }
+
+        .restart-countdown {
+            color: #ff4444;
+            font-weight: bold;
+            font-size: 36px;
+            margin: 0 5px;
+        }
+
+        .podium {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .podium-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .rank-1 {
+            background: linear-gradient(to top, #ffd700, #ffed4e);
+            height: 180px;
+            width: 100px;
+        }
+
+        .rank-2 {
+            background: linear-gradient(to top, #c0c0c0, #e8e8e8);
+            height: 140px;
+            width: 100px;
+        }
+
+        .rank-3 {
+            background: linear-gradient(to top, #cd7f32, #e6b422);
+            height: 100px;
+            width: 100px;
+        }
+
+        .rank-number {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .podium-step .player-avatar {
+            margin: 20px 0 10px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            overflow: hidden;
+            flex-shrink: 0;
+            min-width: 60px;
+            min-height: 60px;
+            max-width: 60px;
+            max-height: 60px;
+        }
+
+        .podium-step.rank-1 .player-avatar,
+        .podium-step.rank-2 .player-avatar,
+        .podium-step.rank-3 .player-avatar {
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            overflow: hidden;
+            flex-shrink: 0;
+            min-width: 60px;
+            min-height: 60px;
+            max-width: 60px;
+            max-height: 60px;
+        }
+
+        .player-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .player-score {
+            font-size: 14px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div id="game-timer">
+            <div id="timer-value">60</div>
+        </div>
+ 
+        <div style="display: none;" class="camera-container">
+            <video id="camera" autoplay playsinline></video>
+            <canvas id="pose-canvas"></canvas>
+        </div>
+        
+        <div id="action-display" class="action-display">等待识别...</div>
+        
+         
+ 
+           <!-- 4个玩家区域 - 全屏横向排列 --> 
+        <div class="players-container">
+            <!-- 玩家1 -->
+            <div class="player-area">
+                <div class="player-avatar" id="player-avatar-1"></div>
+                <div class="player-info">
+                    <span class="player-name" style="color: #ffff00;">玩家1</span>
+                    <span class="player-score" id="score-display-1">积分: 0</span>
+                </div>
+                <div class="action-display" id="action-display-1">未检测到人</div>
+                <div class="game-area" id="game-area-1">
+                    <canvas id="game-canvas-1" class="game-canvas"></canvas>
+                    <div class="character" id="character-1">
+                        <!-- <img id="expression-image-1" src="" alt="表情" style="width: 100%; height: 100%; object-fit: contain; background-color: transparent;"> -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 玩家2 -->
+            <div class="player-area">
+                <div class="player-avatar" id="player-avatar-2"></div>
+                <div class="player-info">
+                    <span class="player-name" style="color: #ffff00;">玩家2</span>
+                    <span class="player-score" id="score-display-2">积分: 0</span>
+                </div>
+                <div class="action-display" id="action-display-2">未检测到人</div>
+                <div class="game-area" id="game-area-2">
+                    <canvas id="game-canvas-2" class="game-canvas"></canvas>
+                    <div class="character" id="character-2">
+                        <!-- <img id="expression-image-2" src="" alt="表情" style="width: 100%; height: 100%; object-fit: contain; background-color: transparent;"> -->
+                    </div>
+                </div>
+            </div>
+            
+            
+        </div>
+        
+        <button style="display: none;"  class="start-button" id="start-button">开始游戏</button>
+    </div>
+
+    <script>
+        // 游戏状态
+        let gameRunning = false;
+        let players = [];
+        let currentAction = "";
+        let isUsingMockData = false;
+        
+        // 跳跃判断方式开关：true 为基于上半身，false 为基于下半身（默认）
+        let useUpperBodyJumpDetection = true;
+        
+        
+        let sharedSlidingImage = null;
+        let isSlidingImageVisible = false;
+        let isSlidingPaused = false;
+        let isObjectsPaused = false;
+        let isJumpDisabled = false;
+        let isInProximity = false;
+        let isOrbitSwitching = false; // 轨道切换中，gameLoop不更新火箭位置
+        let autoOrbitMoveInterval = 5000; // 自动整体下移间隔，单位毫秒，默认5秒
+        let autoOrbitMoveTimer = null; // 自动下移定时器ID
+        
+        let planetIndex = 4; // 星球索引，用于按顺序生成新星球，从第5个（木星）开始
+        
+        // 50个围绕太阳的星球，按距离从近到远排序
+        // size值越大表示星球越大，木星最大为50，最小为1
+        // const planetsData = [
+        //     { name: "水星", size: 2, color: 'radial-gradient(circle, #bdbdbd 0%, #757575 100%)' },
+        //     { name: "金星", size: 15, color: 'radial-gradient(circle, #ffb74d 0%, #ff9800 100%)' },
+        //     { name: "地球", size: 16, color: 'radial-gradient(circle, #4caf50 0%, #2e7d32 100%)' },
+        //     { name: "火星", size: 8, color: 'radial-gradient(circle, #ef5350 0%, #c62828 100%)' },
+        //     { name: "木星", size: 50, color: 'radial-gradient(circle, #ffca28 0%, #ff8f00 100%)' },
+        //     { name: "土星", size: 45, color: 'radial-gradient(circle, #ffe082 0%, #ffb74d 100%)' },
+        //     { name: "天王星", size: 25, color: 'radial-gradient(circle, #b3e5fc 0%, #4fc3f7 100%)' },
+        //     { name: "海王星", size: 24, color: 'radial-gradient(circle, #90caf9 0%, #2196f3 100%)' },
+        //     { name: "冥王星", size: 1, color: 'radial-gradient(circle, #d7ccc8 0%, #a1887f 100%)' },
+        //     { name: "谷神星", size: 3, color: 'radial-gradient(circle, #e0e0e0 0%, #9e9e9e 100%)' },
+        //     { name: "智神星", size: 2, color: 'radial-gradient(circle, #f5f5f5 0%, #bdbdbd 100%)' },
+        //     { name: "婚神星", size: 2, color: 'radial-gradient(circle, #fce4ec 0%, #f48fb1 100%)' },
+        //     { name: "灶神星", size: 4, color: 'radial-gradient(circle, #fff3e0 0%, #ffcc80 100%)' },
+        //     { name: "健神星", size: 2, color: 'radial-gradient(circle, #e8eaf6 0%, #c5cae9 100%)' },
+        //     { name: "小行星带", size: 5, color: 'radial-gradient(circle, #d4e157 0%, #aed581 100%)' },
+        //     { name: "阋神星", size: 6, color: 'radial-gradient(circle, #cfd8dc 0%, #90a4ae 100%)' },
+        //     { name: "鸟神星", size: 4, color: 'radial-gradient(circle, #ffecb3 0%, #ffe082 100%)' },
+        //     { name: "妊神星", size: 3, color: 'radial-gradient(circle, #e1bee7 0%, #ce93d8 100%)' },
+        //     { name: "共工星", size: 2, color: 'radial-gradient(circle, #b2dfdb 0%, #80cbc4 100%)' },
+        //     { name: "创神星", size: 2, color: 'radial-gradient(circle, #f3e5f5 0%, #ce93d8 100%)' },
+        //     { name: "亡神星", size: 2, color: 'radial-gradient(circle, #cfd8dc 0%, #607d8b 100%)' },
+        //     { name: "厄耳枯斯", size: 3, color: 'radial-gradient(circle, #d7ccc8 0%, #8d6e63 100%)' },
+        //     { name: "欧罗巴", size: 12, color: 'radial-gradient(circle, #b3e5fc 0%, #29b6f6 100%)' },
+        //     { name: "甘尼米德", size: 18, color: 'radial-gradient(circle, #fff9c4 0%, #fff176 100%)' },
+        //     { name: "卡利斯托", size: 14, color: 'radial-gradient(circle, #e0e0e0 0%, #9e9e9e 100%)' },
+        //     { name: "艾奥", size: 10, color: 'radial-gradient(circle, #ffcc80 0%, #ff9800 100%)' },
+        //     { name: "泰坦", size: 20, color: 'radial-gradient(circle, #90caf9 0%, #42a5f5 100%)' },
+        //     { name: "瑞亚", size: 5, color: 'radial-gradient(circle, #ce93d8 0%, #ba68c8 100%)' },
+        //     { name: "狄俄涅", size: 3, color: 'radial-gradient(circle, #b3e5fc 0%, #4fc3f7 100%)' },
+        //     { name: "忒堤斯", size: 3, color: 'radial-gradient(circle, #81c784 0%, #4caf50 100%)' },
+        //     { name: "恩克拉多斯", size: 2, color: 'radial-gradient(circle, #b3e5fc 0%, #29b6f6 100%)' },
+        //     { name: "米玛斯", size: 1, color: 'radial-gradient(circle, #e0e0e0 0%, #bdbdbd 100%)' },
+        //     { name: "土卫七", size: 2, color: 'radial-gradient(circle, #ffe0b2 0%, #ffcc80 100%)' },
+        //     { name: "伊阿珀托斯", size: 6, color: 'radial-gradient(circle, #cfd8dc 0%, #90a4ae 100%)' },
+        //     { name: "菲比", size: 1, color: 'radial-gradient(circle, #d7ccc8 0%, #a1887f 100%)' },
+        //     { name: "阿里尔", size: 4, color: 'radial-gradient(circle, #81c784 0%, #4caf50 100%)' },
+        //     { name: "乌姆布里尔", size: 3, color: 'radial-gradient(circle, #7986cb 0%, #5c6bc0 100%)' },
+        //     { name: "泰坦尼亚", size: 7, color: 'radial-gradient(circle, #b3e5fc 0%, #2196f3 100%)' },
+        //     { name: "奥伯龙", size: 6, color: 'radial-gradient(circle, #ce93d8 0%, #9c27b0 100%)' },
+        //     { name: "米兰达", size: 2, color: 'radial-gradient(circle, #c8e6c9 0%, #81c784 100%)' },
+        //     { name: "海卫一", size: 11, color: 'radial-gradient(circle, #b3e5fc 0%, #03a9f4 100%)' },
+        //     { name: "海卫二", size: 1, color: 'radial-gradient(circle, #e8eaf6 0%, #c5cae9 100%)' },
+        //     { name: "海卫三", size: 1, color: 'radial-gradient(circle, #fff3e0 0%, #ffe0b2 100%)' },
+        //     { name: "海卫四", size: 1, color: 'radial-gradient(circle, #fce4ec 0%, #f48fb1 100%)' },
+        //     { name: "海卫五", size: 1, color: 'radial-gradient(circle, #e0f7fa 0%, #b2ebf2 100%)' },
+        //     { name: "冥卫一", size: 2, color: 'radial-gradient(circle, #e0e0e0 0%, #9e9e9e 100%)' },
+        //     { name: "冥卫二", size: 1, color: 'radial-gradient(circle, #d7ccc8 0%, #a1887f 100%)' },
+        //     { name: "冥卫三", size: 1, color: 'radial-gradient(circle, #cfd8dc 0%, #90a4ae 100%)' },
+        //     { name: "阋卫一", size: 1, color: 'radial-gradient(circle, #e8eaf6 0%, #9fa8da 100%)' },
+        //     { name: "鸟卫一", size: 1, color: 'radial-gradient(circle, #ffecb3 0%, #ffd54f 100%)' }
+        // ];
+
+                        const planetsData = [
+                            { name: "水星", size: 2, color: 'radial-gradient(circle, #bdbdbd 0%, #757575 100%)' },
+                            { name: "金星", size: 15, color: 'radial-gradient(circle, #ffb74d 0%, #ff9800 100%)' },
+                            { name: "地球", size: 16, color: 'radial-gradient(circle, #4caf50 0%, #2e7d32 100%)' },
+                            { name: "月球", size: 5, color: 'radial-gradient(circle, #f5f5f5 0%, #bdbdbd 100%)' },
+                            { name: "火星", size: 8, color: 'radial-gradient(circle, #ef5350 0%, #c62828 100%)' },
+                            { name: "谷神星", size: 3, color: 'radial-gradient(circle, #e0e0e0 0%, #9e9e9e 100%)' },
+                            { name: "智神星", size: 2, color: 'radial-gradient(circle, #f5f5f5 0%, #bdbdbd 100%)' },
+                            { name: "婚神星", size: 2, color: 'radial-gradient(circle, #fce4ec 0%, #f48fb1 100%)' },
+                            { name: "灶神星", size: 4, color: 'radial-gradient(circle, #fff3e0 0%, #ffcc80 100%)' },
+                            { name: "健神星", size: 2, color: 'radial-gradient(circle, #e8eaf6 0%, #c5cae9 100%)' },
+                            { name: "小行星带", size: 5, color: 'radial-gradient(circle, #d4e157 0%, #aed581 100%)' },
+                            { name: "木星", size: 50, color: 'radial-gradient(circle, #ffca28 0%, #ff8f00 100%)' },
+                            { name: "欧罗巴", size: 12, color: 'radial-gradient(circle, #b3e5fc 0%, #29b6f6 100%)' },
+                            { name: "甘尼米德", size: 18, color: 'radial-gradient(circle, #fff9c4 0%, #fff176 100%)' },
+                            { name: "卡利斯托", size: 14, color: 'radial-gradient(circle, #e0e0e0 0%, #9e9e9e 100%)' },
+                            { name: "艾奥", size: 10, color: 'radial-gradient(circle, #ffcc80 0%, #ff9800 100%)' },
+                            { name: "土星", size: 45, color: 'radial-gradient(circle, #ffe082 0%, #ffb74d 100%)' },
+                            { name: "泰坦", size: 20, color: 'radial-gradient(circle, #90caf9 0%, #42a5f5 100%)' },
+                            { name: "瑞亚", size: 5, color: 'radial-gradient(circle, #ce93d8 0%, #ba68c8 100%)' },
+                            { name: "狄俄涅", size: 3, color: 'radial-gradient(circle, #b3e5fc 0%, #4fc3f7 100%)' },
+                            { name: "忒堤斯", size: 3, color: 'radial-gradient(circle, #81c784 0%, #4caf50 100%)' },
+                            { name: "恩克拉多斯", size: 2, color: 'radial-gradient(circle, #b3e5fc 0%, #29b6f6 100%)' },
+                            { name: "米玛斯", size: 1, color: 'radial-gradient(circle, #e0e0e0 0%, #bdbdbd 100%)' },
+                            { name: "土卫七", size: 2, color: 'radial-gradient(circle, #ffe0b2 0%, #ffcc80 100%)' },
+                            { name: "伊阿珀托斯", size: 6, color: 'radial-gradient(circle, #cfd8dc 0%, #90a4ae 100%)' },
+                            { name: "菲比", size: 1, color: 'radial-gradient(circle, #d7ccc8 0%, #a1887f 100%)' },
+                            { name: "天王星", size: 25, color: 'radial-gradient(circle, #b3e5fc 0%, #4fc3f7 100%)' },
+                            { name: "阿里尔", size: 4, color: 'radial-gradient(circle, #81c784 0%, #4caf50 100%)' },
+                            { name: "乌姆布里尔", size: 3, color: 'radial-gradient(circle, #7986cb 0%, #5c6bc0 100%)' },
+                            { name: "泰坦尼亚", size: 7, color: 'radial-gradient(circle, #b3e5fc 0%, #2196f3 100%)' },
+                            { name: "奥伯龙", size: 6, color: 'radial-gradient(circle, #ce93d8 0%, #9c27b0 100%)' },
+                            { name: "米兰达", size: 2, color: 'radial-gradient(circle, #c8e6c9 0%, #81c784 100%)' },
+                            { name: "海王星", size: 24, color: 'radial-gradient(circle, #90caf9 0%, #2196f3 100%)' },
+                            { name: "海卫一", size: 11, color: 'radial-gradient(circle, #b3e5fc 0%, #03a9f4 100%)' },
+                            { name: "海卫二", size: 1, color: 'radial-gradient(circle, #e8eaf6 0%, #c5cae9 100%)' },
+                            { name: "海卫三", size: 1, color: 'radial-gradient(circle, #fff3e0 0%, #ffe0b2 100%)' },
+                            { name: "海卫四", size: 1, color: 'radial-gradient(circle, #fce4ec 0%, #f48fb1 100%)' },
+                            { name: "海卫五", size: 1, color: 'radial-gradient(circle, #e0f7fa 0%, #b2ebf2 100%)' },
+                            { name: "冥王星", size: 1, color: 'radial-gradient(circle, #d7ccc8 0%, #a1887f 100%)' },
+                            { name: "冥卫一", size: 2, color: 'radial-gradient(circle, #e0e0e0 0%, #9e9e9e 100%)' },
+                            { name: "冥卫二", size: 1, color: 'radial-gradient(circle, #d7ccc8 0%, #a1887f 100%)' },
+                            { name: "冥卫三", size: 1, color: 'radial-gradient(circle, #cfd8dc 0%, #90a4ae 100%)' },
+                            { name: "阋神星", size: 6, color: 'radial-gradient(circle, #cfd8dc 0%, #90a4ae 100%)' },
+                            { name: "阋卫一", size: 1, color: 'radial-gradient(circle, #e8eaf6 0%, #9fa8da 100%)' },
+                            { name: "鸟神星", size: 4, color: 'radial-gradient(circle, #ffecb3 0%, #ffe082 100%)' },
+                            { name: "鸟卫一", size: 1, color: 'radial-gradient(circle, #ffecb3 0%, #ffd54f 100%)' },
+                            { name: "妊神星", size: 3, color: 'radial-gradient(circle, #e1bee7 0%, #ce93d8 100%)' },
+                            { name: "共工星", size: 2, color: 'radial-gradient(circle, #b2dfdb 0%, #80cbc4 100%)' },
+                            { name: "创神星", size: 2, color: 'radial-gradient(circle, #f3e5f5 0%, #ce93d8 100%)' },
+                            { name: "亡神星", size: 2, color: 'radial-gradient(circle, #cfd8dc 0%, #607d8b 100%)' },
+                            { name: "厄耳枯斯", size: 3, color: 'radial-gradient(circle, #d7ccc8 0%, #8d6e63 100%)' }
+                        ];
+        
+        // 游戏倒计时相关
+        let GAME_DURATION = 8; // 默认60秒
+        let gameTimer = null;
+        let gameTimeLeft = GAME_DURATION;
+
+        // 重新开始倒计时相关
+        let RESTART_COUNTDOWN = 5;
+        let restartTimer = null;
+        let restartTimeLeft = RESTART_COUNTDOWN;
+        
+        // 游戏参数
+        const startButton = document.getElementById('start-button');
+        const gameContainer = document.querySelector('.game-container');
+        
+        // 玩家检测配置
+        // 参考fruit2player.html的配置方式
+        // 配置顺序：从左到右，对应屏幕上的玩家1到玩家4
+        const PLAYER_DETECTION_CONFIG = [
+            { id: 1, detectionArea: { x1: 0.15, y1: 0.3, x2: 0.45, y2: 0.8 } },
+            { id: 2, detectionArea: { x1: 0.55, y1: 0.3, x2: 0.85, y2: 0.8 } }
+        ];
+
+        // 根据手腕x坐标查找对应的玩家配置
+        function getPlayerConfigByWristX(wristX) {
+            for (const config of PLAYER_DETECTION_CONFIG) {
+                const area = config.detectionArea;
+                if (wristX >= area.x1 && wristX < area.x2) {
+                    return config;
+                }
+            }
+            return null;
+        }
+
+        // 动作识别相关（QuickGameStarter / GameFramework）
+        let gameStarter = null;
+        let gameFramework = null;
+        
+        // 玩家数据结构
+        function createPlayer(id) {
+            const character = document.getElementById(`character-${id}`);
+            // 添加火焰元素
+            const flame = document.createElement('div');
+            flame.className = 'flame';
+            character.appendChild(flame);
+
+            return {
+                id: id,
+                gameArea: document.getElementById(`game-area-${id}`),
+                character: character,
+                expressionImage: document.getElementById(`expression-image-${id}`),
+                objects: [],
+                currentAction: "未检测到人",
+                gameRunning: false,
+                gameEnded: false,
+                hasStartedGame: false,
+                score: 0,
+                avatar: '',
+                isCollisionExpression: false,
+                currentOrbit: 1,
+                planetIndex: 4, // 星球索引，从第5个（木星）开始，每个玩家独立
+                orbits: [],
+                lastSwitchTime: 0,
+                orbitAngleOffset: 0,
+                speedMultiplier: 1,
+                accumulatedAngle: 0,
+                lastUpdateTime: Date.now(),
+                currentPose: null
+            };
+        }
+        
+ 
+        
+        // 初始化游戏
+        function initGame() {
+            // 创建4个玩家
+            for (let i = 1; i <= 2; i++) {
+                players.push(createPlayer(i));
+            }
+            
+            startButton.addEventListener('click', toggleGame);
+            
+            
+            // 初始化 MediaPipe 通用框架
+            initGameFramework();
+
+            
+            // 延迟初始化轨道和星球，确保DOM元素已经完全渲染
+            setTimeout(() => {
+                players.forEach(player => {
+                    createOrbitsAndPlanets(player);
+                    
+                    // 添加鼠标左键点击事件监听器
+                    player.gameArea.addEventListener('click', (e) => {
+                        if (player.gameRunning) {
+                            switchOrbit(player);
+                        }
+                    });
+                });
+            }, 100);
+            
+            // 启动游戏主循环
+            startGame();
+        }
+        
+        // 手动启动模拟数据（用于测试）
+        function startMockDataForTest() {
+            startMockActionData();
+        }
+        
+        // 创建轨道和星球
+        function createOrbitsAndPlanets(player) {
+            const gameArea = player.gameArea;
+            const centerX = gameArea.offsetWidth / 2;
+            const centerY = gameArea.offsetHeight / 2;
+            const orbitCount = 4; // 最多展示4个星球轨道
+            
+            // 清空现有轨道
+            player.orbits = [];
+            player.planets = [];
+            player.planetNames = [];
+            player.orbitSizes = []; // 存储每个轨道的大小
+            
+            // // 生成随机轨道大小，确保轨道之间切边相接
+            // const orbitSizes = [];
+            
+            // for (let i = 0; i < orbitCount; i++) {
+            //     // 生成随机大小，范围在50-100之间
+            //     let size = Math.random() * 50 + 50;
+
+            //     // 如果轨道直径超过游戏区域宽度，则限制轨道大小为(游戏区域宽度-10)/2，两边各5像素
+            //     if (size * 2 > player.gameArea.offsetWidth - 10) {
+            //         size = (player.gameArea.offsetWidth - 10) / 2;
+            //     }
+
+            //     orbitSizes.push(size);
+            // }
+
+            // 根据planetsData的size参数生成轨道大小
+            const orbitSizes = [];
+            
+            // 1. 木星轨道直径 = 游戏画布宽度 - 10
+            const jupiterOrbitDiameter = player.gameArea.offsetWidth - 10;
+            
+            // 2. 木星轨道半径 = 木星轨道直径 / 2
+            const jupiterOrbitRadius = jupiterOrbitDiameter / 2;
+            
+            // 3. 差值 = 木星轨道半径 - 最小轨道半径(50)
+            const difference = jupiterOrbitRadius - 50;
+            
+            // 4. 单位值 = 差值 / 50
+            const unitValue = difference / 50;
+
+            for (let i = 0; i < orbitCount; i++) {
+                // 获取对应星球的size参数
+                const planetSize = planetsData[i].size;
+                
+                // 5. 当前星球轨道半径 = 50 + 当前星球size * 单位值
+                const size = 50 + planetSize * unitValue;
+                
+                orbitSizes.push(size);
+            }
+            
+            // 计算第一个轨道的位置（屏幕下方）
+            let currentY = centerY + 200;
+            let currentX = centerX;
+            
+            // 创建轨道和星球，从下往上依次是1，2，3，4
+            for (let i = 0; i < orbitCount; i++) {
+                const orbitSize = orbitSizes[i];
+                
+                // 创建轨道
+                const orbit = document.createElement('div');
+                orbit.className = 'orbit';
+                orbit.style.width = `${orbitSize * 2}px`;
+                orbit.style.height = `${orbitSize * 2}px`;
+                orbit.style.left = `${currentX - orbitSize}px`;
+                orbit.style.top = `${currentY - orbitSize}px`;
+                gameArea.appendChild(orbit);
+                player.orbits.push(orbit);
+                player.orbitSizes.push(orbitSize);
+                
+                // 创建星球
+                const planet = document.createElement('div');
+                planet.className = 'planet';
+                planet.style.width = `${orbitSize * 0.7}px`;
+                planet.style.height = `${orbitSize * 0.7}px`;
+                planet.style.left = `${currentX - orbitSize * 0.3}px`;
+                planet.style.top = `${currentY - orbitSize * 0.3}px`;
+                // 使用planetsData中定义的颜色
+                planet.style.backgroundImage = planetsData[i].color;
+                gameArea.appendChild(planet);
+                player.planets.push(planet);
+                
+                // 添加星球名称
+                const planetName = document.createElement('div');
+                planetName.className = 'planet-name';
+                planetName.textContent = planetsData[i % planetsData.length].name;
+                planetName.style.position = 'absolute';
+                planetName.style.left = `${currentX}px`;
+                planetName.style.top = `${currentY}px`;
+                planetName.style.transform = 'translate(-50%, -50%)';
+                planetName.style.color = '#fff';
+                planetName.style.fontSize = '20px';
+                planetName.style.textAlign = 'center';
+                planetName.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+                planetName.style.zIndex = '2';
+                gameArea.appendChild(planetName);
+                player.planetNames.push(planetName);
+                
+                // 计算下一个轨道的位置，使其与当前轨道相切
+                if (i < orbitCount - 1) {
+                    const nextOrbitSize = orbitSizes[i + 1];
+                    // 圆心稍微偏离垂直线，使轨道看起来更加自然
+                    const offsetX = (Math.random() - 0.5) * 50; // 随机偏移，范围在-25到25之间
+                    currentX += offsetX;
+                    currentY -= orbitSize + nextOrbitSize; // 垂直方向相切，向上移动
+                }
+            }
+            
+            // 创建星星
+            createStars(gameArea);
+            
+            // 初始化角色位置（默认在最下方的轨道，即第1个轨道）
+            player.currentOrbit = 1;
+            updateCharacterPosition(player);
+        }
+        
+        // 创建星星
+        function createStars(gameArea) {
+            const starCount = 50;
+            for (let i = 0; i < starCount; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.width = `${Math.random() * 3 + 1}px`;
+                star.style.height = star.style.width;
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.top = `${Math.random() * 100}%`;
+                star.style.animationDelay = `${Math.random() * 3}s`;
+                gameArea.appendChild(star);
+            }
+        }
+        
+        // ==========================================
+        // 角色位置更新函数 - 根据currentOrbit计算角色在轨道上的位置
+        // ==========================================
+        
+        // 更新角色位置
+        // 【重要】这个函数根据player.currentOrbit的值来计算角色应该出现的位置
+        // 关键：currentOrbit的值是"从下往上数"的第几个轨道
+        // currentOrbit=1 表示最底部的轨道
+        // currentOrbit=2 表示从下往上数的第2个轨道
+        function updateCharacterPosition(player) {
+            console.log("=== updateCharacterPosition 开始 ===");
+            console.log("player.currentOrbit:", player.currentOrbit);
+            console.log("轨道数量:", player.orbits.length);
+            
+            // 【关键】计算轨道数组索引：currentOrbit - 1
+            // 因为数组是[轨道1, 轨道2, 轨道3...]，索引0对应轨道1
+            const currentOrbitIndex = player.currentOrbit - 1;
+            console.log("currentOrbitIndex:", currentOrbitIndex);
+            
+            // 边界检查：如果索引无效直接返回
+            if (currentOrbitIndex < 0 || currentOrbitIndex >= player.orbits.length) {
+                console.log("updateCharacterPosition: 索引无效，直接返回");
+                return;
+            }
+            
+            // 获取当前轨道的大小和位置
+            const orbit = player.orbits[currentOrbitIndex];
+            const orbitSize = player.orbitSizes[currentOrbitIndex];
+            
+            if (!orbit || !orbitSize) {
+                console.log("updateCharacterPosition: orbit或orbitSize无效，直接返回");
+                return;
+            }
+            
+            // 计算轨道圆心位置
+            const orbitLeft = parseInt(orbit.style.left);
+            const orbitTop = parseInt(orbit.style.top);
+            const orbitCenterX = orbitLeft + orbitSize;
+            const orbitCenterY = orbitTop + orbitSize;
+            
+            console.log("轨道位置 - left:", orbitLeft, "top:", orbitTop);
+            console.log("轨道圆心 - x:", orbitCenterX, "y:", orbitCenterY);
+            
+            // 【关键】根据当前时间计算角色在轨道上的角度位置
+            // 角色绕轨道中心做圆周运动
+            // 使用累积角度确保速度变化时位置连续
+            const deltaTime = (Date.now() - player.lastUpdateTime) / 1000;
+            const speed = 1.5 * (player.speedMultiplier || 1);
+            const deltaAngle = speed * deltaTime;
+            player.accumulatedAngle += deltaAngle;
+            player.lastUpdateTime = Date.now();
+            
+            const orbitAngle = player.accumulatedAngle + (player.orbitAngleOffset || 0);
+            
+            // 根据角度计算角色在轨道上的位置
+            // cos(angle) * orbitSize 得到水平偏移
+            // sin(angle) * orbitSize 得到垂直偏移
+            const x = orbitCenterX + Math.cos(orbitAngle) * orbitSize - player.character.offsetWidth / 2;
+            const y = orbitCenterY + Math.sin(orbitAngle) * orbitSize - player.character.offsetHeight / 2;
+            
+            console.log("更新角色位置 - x:", x, "y:", y);
+            
+            // 更新角色DOM元素的left和top样式
+            player.character.style.position = 'absolute';
+            player.character.style.left = `${x}px`;
+            player.character.style.top = `${y}px`;
+            player.character.style.bottom = 'auto';
+            
+            console.log("=== updateCharacterPosition 结束 ===");
+        }
+
+        // ==========================================
+        // 切换轨道函数 - 简化的双向切换逻辑
+        // ==========================================
+
+        function switchOrbit(player) {
+            // 防抖：检查是否在冷却中
+            const now = Date.now();
+            if (player.lastSwitchTime && now - player.lastSwitchTime < 1500) {
+                console.log("切换冷却中，返回");
+                return;
+            }
+            // player.lastSwitchTime = now;
+
+            console.log("=== switchOrbit 开始 ===");
+
+            // 获取当前轨道索引
+            const currentOrbitIndex = player.currentOrbit - 1;
+            console.log("currentOrbit:", player.currentOrbit, "orbits.length:", player.orbits.length);
+
+            if (currentOrbitIndex < 0 || currentOrbitIndex >= player.orbits.length) {
+                console.log("switchOrbit: 索引无效，返回");
+                return;
+            }
+
+            // 获取当前轨道的信息
+            const orbit = player.orbits[currentOrbitIndex];
+            const orbitSize = player.orbitSizes[currentOrbitIndex];
+            const orbitLeft = parseInt(orbit.style.left);
+            const orbitTop = parseInt(orbit.style.top);
+            const orbitCenterX = orbitLeft + orbitSize;
+            const orbitCenterY = orbitTop + orbitSize;
+
+            // 获取火箭当前位置（火箭中心点）
+            const characterCenterX = parseFloat(player.character.style.left) + player.character.offsetWidth / 2;
+            const characterCenterY = parseFloat(player.character.style.top) + player.character.offsetHeight / 2;
+
+            // 计算上方接触点（当前轨道和上一个轨道的切点）
+            let distTop = Infinity;
+            let topContactX, topContactY;
+
+            if (currentOrbitIndex > 0) {
+                // 上一个轨道的信息
+                const upperOrbit = player.orbits[currentOrbitIndex - 1];
+                const upperOrbitSize = player.orbitSizes[currentOrbitIndex - 1];
+                const upperOrbitLeft = parseInt(upperOrbit.style.left);
+                const upperOrbitTop = parseInt(upperOrbit.style.top);
+                const upperOrbitCenterX = upperOrbitLeft + upperOrbitSize;
+                const upperOrbitCenterY = upperOrbitTop + upperOrbitSize;
+
+                // 当前轨道的信息
+                const currentOrbitCenterX = orbitCenterX;
+                const currentOrbitCenterY = orbitCenterY;
+
+                // 计算两个圆心之间的距离
+                const dist = Math.sqrt(
+                    Math.pow(upperOrbitCenterX - currentOrbitCenterX, 2) +
+                    Math.pow(upperOrbitCenterY - currentOrbitCenterY, 2)
+                );
+
+                // 接触点位置：在连心线上，距离上方轨道圆心为 upperOrbitSize 的点
+                // T = A + (r1/d) * (B - A)，其中 A 是上方轨道圆心，B 是当前轨道圆心
+                topContactX = upperOrbitCenterX + (upperOrbitSize / dist) * (currentOrbitCenterX - upperOrbitCenterX);
+                topContactY = upperOrbitCenterY + (upperOrbitSize / dist) * (currentOrbitCenterY - upperOrbitCenterY);
+
+                distTop = Math.sqrt(
+                    Math.pow(characterCenterX - topContactX, 2) +
+                    Math.pow(characterCenterY - topContactY, 2)
+                );
+            }
+
+            // 计算下方接触点（当前轨道和下一个轨道的切点）
+            let distBottom = Infinity;
+            let bottomContactX, bottomContactY;
+
+            if (currentOrbitIndex < player.orbits.length - 1) {
+                // 下一个轨道的信息
+                const lowerOrbit = player.orbits[currentOrbitIndex + 1];
+                const lowerOrbitSize = player.orbitSizes[currentOrbitIndex + 1];
+                const lowerOrbitLeft = parseInt(lowerOrbit.style.left);
+                const lowerOrbitTop = parseInt(lowerOrbit.style.top);
+                const lowerOrbitCenterX = lowerOrbitLeft + lowerOrbitSize;
+                const lowerOrbitCenterY = lowerOrbitTop + lowerOrbitSize;
+
+                // 当前轨道的信息
+                const currentOrbitCenterX = orbitCenterX;
+                const currentOrbitCenterY = orbitCenterY;
+
+                // 计算两个圆心之间的距离
+                const dist = Math.sqrt(
+                    Math.pow(lowerOrbitCenterX - currentOrbitCenterX, 2) +
+                    Math.pow(lowerOrbitCenterY - currentOrbitCenterY, 2)
+                );
+
+                // 接触点位置：在连心线上，距离当前轨道圆心为 orbitSize 的点
+                // T = A + (r/d) * (B - A)，其中 A 是当前轨道圆心，B 是下一个轨道圆心
+                bottomContactX = currentOrbitCenterX + (orbitSize / dist) * (lowerOrbitCenterX - currentOrbitCenterX);
+                bottomContactY = currentOrbitCenterY + (orbitSize / dist) * (lowerOrbitCenterY - currentOrbitCenterY);
+
+                distBottom = Math.sqrt(
+                    Math.pow(characterCenterX - bottomContactX, 2) +
+                    Math.pow(characterCenterY - bottomContactY, 2)
+                );
+            }
+
+            const threshold = 50;
+            console.log("上方接触点距离:", distTop, "下方接触点距离:", distBottom);
+            console.log("threshold:", threshold);
+
+            // 判断在哪个接触点附近
+            let newOrbitIndex = currentOrbitIndex; // 默认不切换
+
+            if (distTop < threshold && distTop <= distBottom) {
+                console.log("条件1满足: distTop < threshold && distTop <= distBottom");
+                // 在上方接触点附近，切换到上一个轨道
+                if (currentOrbitIndex > 0) {
+                    newOrbitIndex = currentOrbitIndex - 1;
+                    console.log("切换到上一个轨道，从", currentOrbitIndex, "到", newOrbitIndex);
+                } else {
+                    console.log("已经在最顶部，不能往上切换");
+                    return;
+                }
+            } else if (distBottom < threshold && distBottom < distTop) {
+                console.log("条件2满足: distBottom < threshold && distBottom < distTop");
+                // 在下方接触点附近，切换到下一个轨道
+                if (currentOrbitIndex < player.orbits.length - 1) {
+                    newOrbitIndex = currentOrbitIndex + 1;
+                    console.log("切换到下一个轨道，从", currentOrbitIndex, "到", newOrbitIndex);
+                } else {
+                    console.log("已经在最底部，不能往下切换");
+                    return;
+                }
+            } else {
+                console.log("不在任何接触点附近，不切换");
+                console.log("  distTop < threshold?", distTop < threshold);
+                console.log("  distBottom < threshold?", distBottom < threshold);
+                return;
+            }
+
+            console.log("最终切换: newOrbitIndex =", newOrbitIndex, "currentOrbitIndex =", currentOrbitIndex);
+
+            // 积分计算：往上切换减1分，往下切换加1分
+            if (newOrbitIndex < currentOrbitIndex) {
+                updatePlayerScore(player, -1);
+                console.log("往上切换轨道，减1分，当前分数:", player.score);
+            } else if (newOrbitIndex > currentOrbitIndex) {
+                updatePlayerScore(player, 1);
+                console.log("往下切换轨道，加1分，当前分数:", player.score);
+            }
+
+            // 保存当前角度用于计算新位置
+            const currentAngle = Math.atan2(
+                characterCenterY - orbitCenterY,
+                characterCenterX - orbitCenterX
+            );
+
+            // 计算角度偏移
+            player.orbitAngleOffset = currentAngle - (player.accumulatedAngle % (Math.PI * 2));
+
+            // 切换轨道
+            player.currentOrbit = newOrbitIndex + 1;
+            console.log("切换后 currentOrbit:", player.currentOrbit);
+
+            // 设置切换标志，防止gameLoop干扰
+            isOrbitSwitching = true;
+
+            // 切换成功后触发轨道下移一次
+            moveAllOrbitsDownWithoutCharacter(player);
+
+            // 清除切换标志
+            isOrbitSwitching = false;
+            player.lastSwitchTime = now;
+            console.log("=== switchOrbit 结束 ===");
+        }
+        
+        // ==========================================
+        // 整体下移函数 - 移动所有轨道和火箭，保持相对位置
+        // ==========================================
+
+        function moveAllOrbitsDownWithoutCharacter(player) {
+            // console.log("=== moveAllOrbitsDownWithoutCharacter 开始 ===");
+            // console.log("执行前 - player.currentOrbit:", player.currentOrbit, "轨道数量:", player.orbits.length);
+
+            const gameArea = player.gameArea;
+            let moveDistance = 50;
+
+            // 计算火箭所在轨道的圆心垂直坐标与游戏区域中点的距离
+            const currentOrbitElement = player.orbits[player.currentOrbit];
+            if (currentOrbitElement) {
+                const orbitTop = parseInt(currentOrbitElement.style.top);
+                const orbitSize = parseInt(currentOrbitElement.style.width);
+                const orbitCenterY = Math.max(0, orbitTop + orbitSize );
+                const gameAreaCenterY = gameArea.offsetHeight / 2; // 游戏区域高度的中间点垂直坐标
+                const d_value = gameAreaCenterY - orbitCenterY;
+                
+                // console.log("位移值:orbitCenterY=" + orbitCenterY + ", gameAreaCenterY=" + gameAreaCenterY + ", d_value=" + d_value);
+
+                if (d_value > 50) {
+                    moveDistance = d_value;
+                }
+            }
+
+            console.log("位移值:" + moveDistance);
+
+            // 【操作1】将所有轨道、星球、星球名称下移
+            for (let i = 0; i < player.orbits.length; i++) {
+                const orbit = player.orbits[i];
+                const planet = player.planets[i];
+                const planetName = player.planetNames[i];
+
+                const currentTop = parseInt(orbit.style.top);
+                orbit.style.top = `${currentTop + moveDistance}px`;
+
+                const planetCurrentTop = parseInt(planet.style.top);
+                planet.style.top = `${planetCurrentTop + moveDistance}px`;
+
+                const planetNameCurrentTop = parseInt(planetName.style.top);
+                planetName.style.top = `${planetNameCurrentTop + moveDistance}px`;
+            }
+
+            // 【关键】火箭也下移相同距离，保持相对轨道的位置
+            const characterTop = parseFloat(player.character.style.top);
+            player.character.style.top = `${characterTop + moveDistance}px`;
+            // console.log("火箭下移: 从", characterTop, "到", characterTop + moveDistance);
+
+            // console.log("所有轨道下移完成");
+
+            // 【操作2】检查是否需要移除底部轨道
+            const gameAreaHeight = gameArea.offsetHeight;
+            const firstOrbit = player.orbits[0];
+            const firstOrbitTop = parseInt(firstOrbit.style.top);
+
+            // console.log("检查是否移除底部轨道 - firstOrbitTop:", firstOrbitTop, "gameAreaHeight:", gameAreaHeight);
+
+            if (firstOrbitTop > gameAreaHeight) {
+                // console.log("移除底部轨道!");
+                
+                // 检查火箭是否在这个被移除的轨道上
+                const isCharacterOnRemovedOrbit = (player.currentOrbit === 1);
+                
+                const removedOrbit = player.orbits.shift();
+                const removedPlanet = player.planets.shift();
+                const removedPlanetName = player.planetNames.shift();
+                player.orbitSizes.shift();
+
+                // 如果火箭在被移除的轨道上，游戏结束
+                if (isCharacterOnRemovedOrbit) {
+                    // console.log("火箭所在的轨道离开游戏区域，游戏结束!");
+                    player.gameRunning = false;
+                    player.gameEnded = true;
+                    const actionDisplay = document.getElementById(`action-display-${player.id}`);
+                    if (actionDisplay) {
+                        actionDisplay.style.display ="block";
+                        actionDisplay.textContent = "游戏结束";
+                    }
+                    
+                    // 检查是否所有已经开始过游戏的玩家都结束了
+                    // 已经开始过游戏的玩家是指：曾经运行过游戏(gameRunning曾经为true)或已经结束(gameEnded为true)
+                    const activePlayers = players.filter(p => p.hasStartedGame || p.gameEnded);
+                    const allActivePlayersEnded = activePlayers.every(p => p.gameEnded);
+                    if (allActivePlayersEnded && activePlayers.length > 0) {
+                        // console.log("所有已经开始游戏的玩家都结束了，显示排名浮窗");
+                        showGameRankings();
+                    }
+                    
+                    return; // 直接返回，不再继续处理
+                }
+                else {
+                    // 如果火箭不在被移除的轨道上，currentOrbit减1
+                    // 因为数组shift后，所有元素前移，索引需要调整
+                    player.currentOrbit--;
+                    // console.log("轨道移除后，currentOrbit减1，现在为:", player.currentOrbit);
+                }
+
+                if (removedOrbit) removedOrbit.remove();
+                if (removedPlanet) removedPlanet.remove();
+                if (removedPlanetName) removedPlanetName.remove();
+            }
+
+            // console.log("移除后 - 轨道数量:", player.orbits.length);
+
+            // 【操作3】添加新轨道到顶部
+            // 根据planetsData的size参数计算轨道大小
+            const currentPlanetIndex = player.planetIndex % planetsData.length; // 获取即将生成的星球索引（使用玩家独立的索引）
+            const currentPlanetSize = planetsData[currentPlanetIndex].size;
+            
+            // 1. 木星轨道直径 = 游戏画布宽度 - 10
+            const jupiterOrbitDiameter = gameArea.offsetWidth - 10;
+            
+            // 2. 木星轨道半径 = 木星轨道直径 / 2
+            const jupiterOrbitRadius = jupiterOrbitDiameter / 2;
+            
+            // 3. 差值 = 木星轨道半径 - 最小轨道半径(50)
+            const difference = jupiterOrbitRadius - 50;
+            
+            // 4. 单位值 = 差值 / 50
+            const unitValue = difference / 50;
+            
+            // 5. 当前星球轨道半径 = 50 + 当前星球size * 单位值
+            const newOrbitSize = 50 + currentPlanetSize * unitValue;
+
+            const lastOrbitIndex = player.orbits.length - 1;
+            const lastOrbit = player.orbits[lastOrbitIndex];
+            const lastOrbitSize = player.orbitSizes[lastOrbitIndex];
+            const lastOrbitLeft = parseInt(lastOrbit.style.left);
+            const lastOrbitTop = parseInt(lastOrbit.style.top);
+            const lastOrbitCenterX = lastOrbitLeft + lastOrbitSize;
+            const lastOrbitCenterY = lastOrbitTop + lastOrbitSize;
+
+            const offsetX = (Math.random() - 0.5) * 50;
+            let newOrbitCenterX = lastOrbitCenterX + offsetX;
+            const newOrbitCenterY = lastOrbitCenterY - (lastOrbitSize + newOrbitSize);
+
+            const gameAreaWidth = gameArea.offsetWidth;
+            const minCenterX = newOrbitSize;
+            const maxCenterX = gameAreaWidth - newOrbitSize;
+            newOrbitCenterX = Math.max(minCenterX, Math.min(maxCenterX, newOrbitCenterX));
+
+            // 创建新轨道
+            const newOrbit = document.createElement('div');
+            newOrbit.className = 'orbit';
+            newOrbit.style.width = `${newOrbitSize * 2}px`;
+            newOrbit.style.height = `${newOrbitSize * 2}px`;
+            newOrbit.style.left = `${newOrbitCenterX - newOrbitSize}px`;
+            newOrbit.style.top = `${newOrbitCenterY - newOrbitSize}px`;
+            gameArea.appendChild(newOrbit);
+            player.orbits.push(newOrbit);
+            player.orbitSizes.push(newOrbitSize);
+
+            // 创建新星球
+            const newPlanet = document.createElement('div');
+            newPlanet.className = 'planet';
+            newPlanet.style.width = `${newOrbitSize * 0.6}px`;
+            newPlanet.style.height = `${newOrbitSize * 0.6}px`;
+            newPlanet.style.left = `${newOrbitCenterX - newOrbitSize * 0.3}px`;
+            newPlanet.style.top = `${newOrbitCenterY - newOrbitSize * 0.3}px`;
+            // 使用planetsData中定义的颜色
+            newPlanet.style.backgroundImage = planetsData[currentPlanetIndex].color;
+            gameArea.appendChild(newPlanet);
+            player.planets.push(newPlanet);
+
+            // 添加星球名称
+            const newPlanetName = document.createElement('div');
+            newPlanetName.className = 'planet-name';
+            // 按顺序轮询获取星球名称（使用玩家独立的索引）
+            newPlanetName.textContent = planetsData[player.planetIndex % planetsData.length].name;
+            player.planetIndex++; // 索引递增，达到数组长度后自动取模循环
+            newPlanetName.style.position = 'absolute';
+            newPlanetName.style.left = `${newOrbitCenterX}px`;
+            newPlanetName.style.top = `${newOrbitCenterY}px`;
+            newPlanetName.style.transform = 'translate(-50%, -50%)';
+            newPlanetName.style.color = '#fff';
+            newPlanetName.style.fontSize = '20px';
+            newPlanetName.style.textAlign = 'center';
+            newPlanetName.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+            newPlanetName.style.zIndex = '2';
+            gameArea.appendChild(newPlanetName);
+            player.planetNames.push(newPlanetName);
+
+            // console.log("=== moveAllOrbitsDownWithoutCharacter 结束 ===");
+        }
+        
+        // ==========================================
+        // 轨道移动与新轨道生成函数 - 旧函数，保留备用
+        // ==========================================
+        
+         
+        
+        // ==========================================
+        // 轨道移动与新轨道生成函数 - 切换后轨道重新排列
+        // ==========================================
+        
+        // 所有星球轨道往下移，同时产生1个新的星球轨道
+        // 这个函数是第2次及以后切换不稳定的关键，因为它会：
+        // 1. 移动所有轨道（改变orbit.style.top）
+        // 2. 可能移除底部轨道（从数组中shift删除）
+        // 3. 添加新轨道到顶部（push到数组）
+        // 4. 更新player.currentOrbit = 2
+        // 注意：切换后火箭位置没有立即更新到新轨道，只是设置了currentOrbit=2
+        function moveOrbitsDownAndGenerateNew(player) {
+            console.log("=== moveOrbitsDownAndGenerateNew 开始 ===");
+            console.log("切换前 - player.currentOrbit:", player.currentOrbit);
+            console.log("切换前 - 轨道数量:", player.orbits.length);
+            
+            const gameArea = player.gameArea;
+            
+            // 【关键】每次切换时，所有轨道往下移动的距离（固定50px）
+            const moveDistance = 50;
+            
+            // 【操作1】将所有现有轨道的top位置增加50px（往下移动视觉效果）
+            for (let i = 0; i < player.orbits.length; i++) {
+                const orbit = player.orbits[i];
+                const planet = player.planets[i];
+                const planetName = player.planetNames[i];
+                
+                // 移动轨道
+                const currentTop = parseInt(orbit.style.top);
+                orbit.style.top = `${currentTop + moveDistance}px`;
+                
+                // 移动星球
+                const planetCurrentTop = parseInt(planet.style.top);
+                planet.style.top = `${planetCurrentTop + moveDistance}px`;
+                
+                // 移动星球名称
+                const planetNameCurrentTop = parseInt(planetName.style.top);
+                planetName.style.top = `${planetNameCurrentTop + moveDistance}px`;
+            }
+            
+            console.log("移动轨道后 - 轨道数量:", player.orbits.length);
+            
+            // 【操作2】检查最下方的轨道是否已经移出画布，如果是则移除
+            const gameAreaHeight = gameArea.offsetHeight;
+            const firstOrbit = player.orbits[0];
+            const firstOrbitTop = parseInt(firstOrbit.style.top);
+            const firstOrbitSize = player.orbitSizes[0];
+            
+            console.log("检查是否移除底部轨道 - firstOrbitTop:", firstOrbitTop, "gameAreaHeight:", gameAreaHeight);
+            
+            if (firstOrbitTop > gameAreaHeight) {
+                console.log("移除底部轨道!");
+                // 【关键】从数组头部移除最底部的轨道（shift）
+                const removedOrbit = player.orbits.shift();
+                const removedPlanet = player.planets.shift();
+                const removedPlanetName = player.planetNames.shift();
+                player.orbitSizes.shift();
+                
+                if (removedOrbit) removedOrbit.remove();
+                if (removedPlanet) removedPlanet.remove();
+                if (removedPlanetName) removedPlanetName.remove();
+            }
+            
+            console.log("移除后 - 轨道数量:", player.orbits.length);
+            
+            // 【操作3】生成新的星球轨道（添加到最上方）
+            // 根据planetsData的size参数计算轨道大小
+            const currentPlanetIndex = player.planetIndex % planetsData.length; // 使用玩家独立的索引
+            const currentPlanetSize = planetsData[currentPlanetIndex].size;
+            
+            // 1. 木星轨道直径 = 游戏画布宽度 - 10
+            const jupiterOrbitDiameter = gameArea.offsetWidth - 10;
+            
+            // 2. 木星轨道半径 = 木星轨道直径 / 2
+            const jupiterOrbitRadius = jupiterOrbitDiameter / 2;
+            
+            // 3. 差值 = 木星轨道半径 - 最小轨道半径(50)
+            const difference = jupiterOrbitRadius - 50;
+            
+            // 4. 单位值 = 差值 / 50
+            const unitValue = difference / 50;
+            
+            // 5. 当前星球轨道半径 = 50 + 当前星球size * 单位值
+            const newOrbitSize = 50 + currentPlanetSize * unitValue;
+            
+            // 获取当前最上方轨道（新轨道将紧贴在它上方，与它相切）
+            const lastOrbitIndex = player.orbits.length - 1;
+            const lastOrbit = player.orbits[lastOrbitIndex];
+            const lastOrbitSize = player.orbitSizes[lastOrbitIndex];
+            const lastOrbitLeft = parseInt(lastOrbit.style.left);
+            const lastOrbitTop = parseInt(lastOrbit.style.top);
+            const lastOrbitCenterX = lastOrbitLeft + lastOrbitSize;
+            const lastOrbitCenterY = lastOrbitTop + lastOrbitSize;
+            
+            // 计算新轨道的位置，使其与最上方的轨道相切（有一个接触点）
+            // offsetX是随机偏移，让轨道看起来更自然
+            const offsetX = (Math.random() - 0.5) * 50;
+            let newOrbitCenterX = lastOrbitCenterX + offsetX;
+            // 新轨道的中心Y = 上一个轨道中心Y - (上一个轨道半径 + 新轨道半径)
+            // 这样两个圆正好在垂直方向相切
+            const newOrbitCenterY = lastOrbitCenterY - (lastOrbitSize + newOrbitSize);
+            
+            // 确保新轨道不会超出画布的左右边界
+            const gameAreaWidth = gameArea.offsetWidth;
+            const minCenterX = newOrbitSize;
+            const maxCenterX = gameAreaWidth - newOrbitSize;
+            newOrbitCenterX = Math.max(minCenterX, Math.min(maxCenterX, newOrbitCenterX));
+            
+            // 验证新轨道与前一个轨道的接触点距离
+            const distanceBetweenCenters = Math.sqrt(Math.pow(newOrbitCenterX - lastOrbitCenterX, 2) + Math.pow(newOrbitCenterY - lastOrbitCenterY, 2));
+            const expectedDistance = lastOrbitSize + newOrbitSize;
+            
+            // 如果距离偏差过大，调整位置以确保相切
+            if (Math.abs(distanceBetweenCenters - expectedDistance) > 5) {
+                const angle = Math.atan2(newOrbitCenterY - lastOrbitCenterY, newOrbitCenterX - lastOrbitCenterX);
+                newOrbitCenterX = lastOrbitCenterX + Math.cos(angle) * expectedDistance;
+                newOrbitCenterY = lastOrbitCenterY + Math.sin(angle) * expectedDistance;
+                
+                newOrbitCenterX = Math.max(minCenterX, Math.min(maxCenterX, newOrbitCenterX));
+            }
+            
+            // 创建新轨道DOM元素并添加到数组末尾（push）
+            const newOrbit = document.createElement('div');
+            newOrbit.className = 'orbit';
+            newOrbit.style.width = `${newOrbitSize * 2}px`;
+            newOrbit.style.height = `${newOrbitSize * 2}px`;
+            newOrbit.style.left = `${newOrbitCenterX - newOrbitSize}px`;
+            newOrbit.style.top = `${newOrbitCenterY - newOrbitSize}px`;
+            gameArea.appendChild(newOrbit);
+            // 【关键】将新轨道push到数组末尾
+            // 此时数组结构变为：[旧轨道1, 旧轨道2, 旧轨道3, 新轨道]
+            // 从下往上数：旧轨道1是第1个（最底下），旧轨道2是第2个，等等
+            player.orbits.push(newOrbit);
+            player.orbitSizes.push(newOrbitSize);
+            
+            // 创建新星球并添加到数组
+            const newPlanet = document.createElement('div');
+            newPlanet.className = 'planet';
+            newPlanet.style.width = `${newOrbitSize * 0.6}px`;
+            newPlanet.style.height = `${newOrbitSize * 0.6}px`;
+            newPlanet.style.left = `${newOrbitCenterX - newOrbitSize * 0.3}px`;
+            newPlanet.style.top = `${newOrbitCenterY - newOrbitSize * 0.3}px`;
+            // 使用planetsData中定义的颜色
+            newPlanet.style.backgroundImage = planetsData[currentPlanetIndex].color;
+            gameArea.appendChild(newPlanet);
+            player.planets.push(newPlanet);
+
+            // 添加星球名称
+            const newPlanetName = document.createElement('div');
+            newPlanetName.className = 'planet-name';
+            newPlanetName.textContent = planetsData[player.planetIndex % planetsData.length].name; // 使用玩家独立的索引
+            player.planetIndex++; // 索引递增
+            newPlanetName.style.position = 'absolute';
+            newPlanetName.style.left = `${newOrbitCenterX}px`;
+            newPlanetName.style.top = `${newOrbitCenterY}px`;
+            newPlanetName.style.transform = 'translate(-50%, -50%)';
+            newPlanetName.style.color = '#fff';
+            newPlanetName.style.fontSize = '20px';
+            newPlanetName.style.textAlign = 'center';
+            newPlanetName.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)';
+            newPlanetName.style.zIndex = '2';
+            gameArea.appendChild(newPlanetName);
+            player.planetNames.push(newPlanetName);
+            
+            // 【核心操作】设置火箭当前轨道为第2个轨道
+            // 这意味着火箭应该在"从下往上数的第2个轨道"上运动
+            // 但此时火箭的style.left和style.top位置并没有立即更新！
+            // 需要调用updateCharacterPosition才会真正更新位置
+            player.currentOrbit = 2;
+            console.log("moveOrbitsDownAndGenerateNew 内部 - 设置 player.currentOrbit =", player.currentOrbit);
+            console.log("moveOrbitsDownAndGenerateNew 内部 - 轨道数量 =", player.orbits.length);
+            
+            // 【关键】调用updateCharacterPosition根据currentOrbit更新火箭位置
+            // 这个函数会根据player.currentOrbit和当前轨道数组重新计算火箭位置
+            updateCharacterPosition(player);
+            console.log("=== moveOrbitsDownAndGenerateNew 结束 ===");
+        }
+        
+
+        
+        // 模拟动作数据
+        let mockDataInterval = null;
+        function startMockActionData() {
+            if (mockDataInterval) {
+                clearInterval(mockDataInterval);
+            }
+            
+            isUsingMockData = true;
+            console.log('开始使用模拟动作数据');
+            console.log('当前players数组长度:', players.length);
+            
+            const actions = ['站立', '举起双手', '双手抱头', '举起右手', '跳起来'];
+            let currentIndex = 0;
+            
+            // 立即执行一次，不需要等待3秒
+            const updateMockData = () => {
+                currentAction = actions[currentIndex];
+                currentIndex = (currentIndex + 1) % actions.length;
+                console.log('模拟动作:', currentAction);
+                console.log('当前players数组长度:', players.length);
+                
+                const actionDisplay = document.getElementById('action-display');
+                if (actionDisplay) {
+                    actionDisplay.textContent = currentAction;
+                }
+                
+                // 确保players数组已经初始化
+                if (players.length > 0) {
+                    console.log('更新所有玩家的动作状态');
+                    // 更新所有玩家的动作状态
+                    players.forEach(player => {
+                        player.currentAction = currentAction;
+                        const actionDisplay = document.getElementById(`action-display-${player.id}`);
+                        if (actionDisplay) {
+                            // 显示实际动作，无论游戏是否运行
+                            actionDisplay.textContent = currentAction;
+                            console.log('更新玩家', player.id, '的动作状态为:', currentAction);
+                        }
+                        
+                        // 游戏开始判断：如果玩家举起右手且游戏未运行，则启动该玩家的游戏
+                        if (currentAction === "举起右手" && !player.gameRunning) {
+                            console.log('玩家', player.id, '举起右手，启动游戏');
+                            togglePlayerGame(player.id);
+                        }
+                        
+                        // 跳跃逻辑：切换轨道
+                        if (currentAction === "跳起来" && !isJumpDisabled && player.gameRunning) {
+                            const character = player.character;
+                            if (character) {
+                                console.log('玩家', player.id, '跳起来，切换轨道');
+                                switchOrbit(player);
+                            }
+                        }
+                    });
+                } else {
+                    console.log('玩家数组尚未初始化，等待下一次更新');
+                }
+            };
+            
+            // 延迟执行一次，确保players数组已经初始化完成
+            setTimeout(() => {
+                updateMockData();
+                
+                // 设置定时器，每隔3秒执行一次
+                mockDataInterval = setInterval(updateMockData, 3000);
+            }, 500);
+        }
+        
+
+        let gameRanking = null;
+
+        async function initGameFramework() {
+            try {
+                gameStarter = new QuickGameStarter({
+                    gameFrameworkOptions: {
+                        playerCount: 2,
+                        selfieMode: true,
+                        videoElementId: 'camera',
+                        poseCanvasId: 'pose-canvas',
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.5,
+                        minTrackingConfidence: 0.5,
+                        jumpUpperThreshold: 0.48,
+                        jumpLowerThreshold: 0.3,
+                        useUpperBodyJumpDetection: true,
+                        actionCooldown: 300,
+                        detectionAreaTop: 0.3,
+                        detectionAreaBottom: 0.8,
+                        actionTypes: [
+                            ACTION_TYPE.RIGHT_HAND_RAISED,
+                            ACTION_TYPE.JUMPING,
+                            ACTION_TYPE.STANDING
+                        ],
+                        avatarRadiusRatio: 0.15,
+                        playerDetectionConfigs: PLAYER_DETECTION_CONFIG.map((c) => ({
+                            id: c.id,
+                            detectionArea: {
+                                x1: c.detectionArea.x1,
+                                y1: c.detectionArea.y1,
+                                x2: c.detectionArea.x2,
+                                y2: c.detectionArea.y2
+                            }
+                        }))
+                    },
+                    onInitialized: (data, framework) => {
+                        if (framework && typeof framework.setActionOptions === 'function') {
+                            framework.setActionOptions({
+                                useUpperBodyJumpDetection: true,
+                                jumpUpperThreshold: 0.48,
+                                jumpLowerThreshold: 0.3
+                            });
+                        }
+                    },
+                    onStarted: () => {},
+                    onPlayerAction: (playerId, action, landmarks) => {
+                        handlePlayerAction(playerId, action, landmarks);
+                    },
+                    onPoseResults: (results) => {
+                        results.forEach((result) => {
+                            updatePlayerPoseFromFramework(result.playerId, result.landmarks);
+                        });
+                    },
+                    onActionResults: (results) => {
+                        results.forEach((result) => {
+                            updateActionDisplayFromFramework(result.playerId, result.action);
+                            if (result.action === ACTION_TYPE.JUMPING) {
+                                handlePlayerAction(result.playerId, result.action, result.landmarks);
+                            }
+                        });
+                    },
+                    onCameraReady: () => {
+                        startGameTimer();
+                    },
+                    onError: (error) => {
+                        console.error('游戏框架错误:', error);
+                        const el = document.getElementById('action-display');
+                        if (el) {
+                            el.textContent =
+                                '摄像头访问失败: ' + error.message + '，使用模拟数据';
+                        }
+                        startMockActionData();
+                    }
+                });
+                gameFramework = await gameStarter.start(gameLoop);
+            } catch (e) {
+                console.error('游戏框架启动失败:', e);
+                startMockActionData();
+            }
+        }
+
+        function isRankingInteractionLocked() {
+            const rankingContainer = document.getElementById('game-rankings');
+            if (!rankingContainer) return false;
+
+            const lockedUntil = Number(rankingContainer.dataset.lockedUntil || 0);
+            return Date.now() < lockedUntil;
+        }
+
+        function handlePlayerAction(playerId, action, landmarks) {
+            if (isRankingInteractionLocked()) {
+                return;
+            }
+
+            const player = players.find((p) => p.id === playerId);
+            if (!player) return;
+            player.currentAction = action;
+
+            if (document.getElementById('game-rankings')) {
+                if (action === ACTION_TYPE.RIGHT_HAND_RAISED) {
+                    if (gameRanking) {
+                        gameRanking.hide();
+                        gameRanking = null;
+                    }
+                    restartGameFromRanking(playerId);
+                }
+                return;
+            }
+
+            if (
+                action === ACTION_TYPE.RIGHT_HAND_RAISED &&
+                !player.gameRunning &&
+                !player.gameEnded
+            ) {
+                const closeBtn = document.getElementById('close-ranking');
+                if (closeBtn) {
+                    closeBtn.click();
+                }
+                togglePlayerGame(playerId);
+            }
+
+            if (
+                action === ACTION_TYPE.JUMPING &&
+                player.gameRunning &&
+                !isJumpDisabled
+            ) {
+                const character = player.character;
+                if (character && !character.classList.contains('orbit-switch')) {
+                    switchOrbit(player);
+                }
+            }
+        }
+
+        function updateActionDisplayFromFramework(playerId, action) {
+            const player = players.find((p) => p.id === playerId);
+            if (!player) return;
+            const actionDisplay = document.getElementById('action-display-' + playerId);
+            if (!actionDisplay) return;
+            if (player.gameEnded) {
+                actionDisplay.textContent = '游戏结束';
+            } else if (!player.gameRunning) {
+                actionDisplay.textContent = '举起右手开始';
+            } else {
+                actionDisplay.textContent = action;
+            }
+        }
+
+        function updatePlayerPoseFromFramework(playerId, landmarks) {
+            const player = players.find((p) => p.id === playerId);
+            if (!player || !landmarks) return;
+            player.currentPose = landmarks;
+        }
+
+        function toggleGame() {
+            gameRunning = !gameRunning;
+            
+            if (gameRunning) {
+                startButton.textContent = "停止游戏";
+                startButton.style.background = "#f44336";
+                // 开始所有玩家的游戏
+                players.forEach(player => {
+                    if (!player.gameRunning) {
+                        togglePlayerGame(player.id);
+                    }
+                });
+            } else {
+                startButton.textContent = "开始游戏";
+                startButton.style.background = "#4CAF50";
+                // 停止所有玩家的游戏
+                players.forEach(player => {
+                    if (player.gameRunning) {
+                        togglePlayerGame(player.id);
+                    }
+                });
+                // 排名浮窗将在所有玩家游戏结束时自动显示
+            }
+        }
+        
+        // 捕获玩家头像（与 fruit4playercommon 一致：通用截取 + 写入 player.avatar，供 GameRanking 展示）
+        function capturePlayerAvatar(playerIndex) {
+            if (gameStarter) {
+                const avatarDataUrl = gameStarter.captureAvatar(playerIndex);
+                if (avatarDataUrl) {
+                    const player = players.find((p) => p.id === playerIndex);
+                    if (player) {
+                        player.avatar = avatarDataUrl;
+                    }
+                }
+                return;
+            }
+
+            const video = document.getElementById('camera');
+            if (!video || !video.srcObject) return;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const faceSize = Math.min(canvas.width, canvas.height) * 0.3;
+            const faceX = (canvas.width - faceSize) / 2;
+            const faceY = (canvas.height - faceSize) / 2;
+
+            const avatarCanvas = document.createElement('canvas');
+            avatarCanvas.width = faceSize;
+            avatarCanvas.height = faceSize;
+            const avatarCtx = avatarCanvas.getContext('2d');
+            avatarCtx.drawImage(canvas, faceX, faceY, faceSize, faceSize, 0, 0, faceSize, faceSize);
+
+            const avatarDataUrl = avatarCanvas.toDataURL('image/png');
+
+            const avatarElement = document.getElementById(`player-avatar-${playerIndex}`);
+            if (avatarElement) {
+                avatarElement.style.backgroundImage = `url('${avatarDataUrl}')`;
+            }
+
+            const player = players.find((p) => p.id === playerIndex);
+            if (player) {
+                player.avatar = avatarDataUrl;
+            }
+        }
+
+        function togglePlayerGame(playerIndex) {
+            const player = players.find(p => p.id === playerIndex);
+            if (!player) return;
+            
+            // 获取玩家区域元素
+            const playerArea = document.querySelector(`.player-area:nth-child(${playerIndex})`);
+            
+            player.gameRunning = !player.gameRunning;
+            
+            if (player.gameRunning) {
+                // 停止游戏倒计时（任意一个用户开始游戏就停止倒计时）
+                stopGameTimer();
+                
+                // 标记该玩家已经开始过游戏
+                player.hasStartedGame = true;
+                
+                // 开始该玩家的游戏
+                player.objects = [];
+                // 清零积分
+                player.score = 0;
+                // 重置游戏结束标志
+                player.gameEnded = false;
+                // 重置速度相关属性
+                player.speedMultiplier = 1;
+                player.accumulatedAngle = 0;
+                player.lastUpdateTime = Date.now();
+                player.orbitAngleOffset = 0;
+                // 更新积分显示
+                const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+                if (scoreDisplay) {
+                    scoreDisplay.textContent = `积分: ${player.score}`;
+                }
+                 
+                // 添加game-running类
+                if (playerArea) {
+                    playerArea.classList.add('game-running');
+                }
+                
+                // 拍摄玩家头像并写入 player.avatar（排名浮窗 GameRanking 使用）
+                capturePlayerAvatar(playerIndex);
+            } else {
+                // 停止该玩家的游戏
+                player.objects.forEach(obj => {
+                    if (obj.element && obj.element.parentNode) {
+                        player.gameArea.removeChild(obj.element);
+                    }
+                });
+                player.objects = [];
+                // 重置游戏结束标志
+                player.gameEnded = false;
+
+                // 移除game-running类
+                if (playerArea) {
+                    playerArea.classList.remove('game-running');
+                }
+            }
+        }
+        
+        // 启动游戏倒计时
+        function startGameTimer() {
+            const timerElement = document.getElementById('game-timer');
+            const timerValue = document.getElementById('timer-value');
+
+            if (timerElement) {
+                timerElement.style.display = 'flex';
+            }
+
+            gameTimeLeft = GAME_DURATION;
+            timerValue.textContent = gameTimeLeft;
+
+            gameTimer = setInterval(() => {
+                gameTimeLeft--;
+                timerValue.textContent = gameTimeLeft;
+
+                if (gameTimeLeft <= 10) {
+                    timerValue.style.color = '#ff4444';
+                    timerValue.style.textShadow = '2px 2px 4px rgba(255, 0, 0, 0.5)';
+                }
+
+                if (gameTimeLeft <= 0) {
+                    stopGameTimer();
+                    window.location.href = '/smartgames.html';
+                }
+            }, 1000);
+        }
+
+        // 停止游戏倒计时
+        function stopGameTimer() {
+            if (gameTimer) {
+                clearInterval(gameTimer);
+                gameTimer = null;
+            }
+
+            const timerElement = document.getElementById('game-timer');
+            if (timerElement) {
+                timerElement.style.display = 'none';
+            }
+        }
+
+        // 开始游戏
+        function startGame() {
+            players.forEach(player => {
+                player.objects = [];
+                player.gameEnded = false;
+            });
+
+            gameLoop();
+
+ 
+
+            // // 启动游戏倒计时
+            // startGameTimer();
+
+            // 定时自动整体下移所有轨道
+            if (autoOrbitMoveTimer) {
+                clearInterval(autoOrbitMoveTimer);
+            }
+            autoOrbitMoveTimer = setInterval(() => {
+                players.forEach(player => {
+
+                    if (player.gameRunning && Date.now() - player.lastSwitchTime > 1000) {
+                        moveAllOrbitsDownWithoutCharacter(player);
+                    }
+                });
+            }, autoOrbitMoveInterval);
+        }
+        
+        // 停止游戏
+        function stopGame() {
+            // 清除自动下移定时器
+            if (autoOrbitMoveTimer) {
+                clearInterval(autoOrbitMoveTimer);
+                autoOrbitMoveTimer = null;
+            }
+
+            players.forEach(player => {
+                player.objects.forEach(obj => {
+                    if (obj.element) {
+                        player.gameArea.removeChild(obj.element);
+                    }
+                });
+                player.objects = [];
+            });
+         
+        }
+        
+        // 显示游戏排名（通用 GameRanking + game-ranking.css）
+        function showGameRankings() {
+            const activePlayers = players.filter((player) => player.hasStartedGame);
+            const sortedPlayers = [...activePlayers].sort((a, b) => b.score - a.score);
+            gameRanking = new GameRanking();
+            gameRanking.showRankings(sortedPlayers, {
+                topCount: 3,
+                title: '游戏排名',
+                restartCountdown: 6,
+                minDisplayTime: 2000,
+                onRestart: () => {
+                    restartGameFromRanking();
+                },
+                returnUrl: '/smartgames.html'
+            });
+        }
+
+        // 停止重新开始倒计时
+        function stopRestartCountdown() {
+            if (restartTimer) {
+                clearInterval(restartTimer);
+                restartTimer = null;
+            }
+        }
+
+        // 重新开始游戏（从排名浮窗触发）
+        function restartGameFromRanking(startingPlayerId = null) {
+            stopRestartCountdown();
+
+            if (gameRanking) {
+                gameRanking.hide();
+                gameRanking = null;
+            } else {
+                const rankingContainer = document.getElementById('game-rankings');
+                if (rankingContainer && rankingContainer.parentNode) {
+                    rankingContainer.parentNode.removeChild(rankingContainer);
+                }
+            }
+
+            // 重置所有玩家状态（参考 fruit4player.html 的优化做法）
+            players.forEach(player => {
+                // 重置游戏状态
+                player.score = 0;
+                player.gameRunning = false;
+                player.gameEnded = false;
+                player.hasStartedGame = false;
+                player.currentOrbit = 1;
+                player.planetIndex = 4;
+                player.lastSwitchTime = 0;
+                player.orbitAngleOffset = 0;
+                player.speedMultiplier = 1;
+                player.accumulatedAngle = 0;
+                player.lastUpdateTime = Date.now();
+
+                // 隐藏动作显示
+                const actionDisplay = document.getElementById(`action-display-${player.id}`);
+                if (actionDisplay) {
+                    actionDisplay.style.display = 'none';
+                    actionDisplay.textContent = "等待识别...";
+                }
+
+                // 清理轨道DOM元素
+                player.orbits.forEach(orbit => {
+                    if (orbit.parentNode) {
+                        orbit.parentNode.removeChild(orbit);
+                    }
+                });
+                player.orbits = [];
+                player.orbitSizes = [];
+
+                // 清理星球DOM元素
+                player.planets.forEach(planet => {
+                    if (planet.parentNode) {
+                        planet.parentNode.removeChild(planet);
+                    }
+                });
+                player.planets = [];
+
+                // 清理星球名称DOM元素
+                player.planetNames.forEach(name => {
+                    if (name.parentNode) {
+                        name.parentNode.removeChild(name);
+                    }
+                });
+                player.planetNames = [];
+
+                // 清理玩家对象
+                player.objects.forEach(obj => {
+                    if (obj.element && obj.element.parentNode) {
+                        obj.element.parentNode.removeChild(obj.element);
+                    }
+                });
+                player.objects = [];
+
+                // 重置积分显示
+                const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+                if (scoreDisplay) {
+                    scoreDisplay.textContent = `积分: 0`;
+                }
+
+                // 重置玩家区域样式
+                const playerArea = document.querySelector(`.player-area:nth-child(${player.id})`);
+                if (playerArea) {
+                    playerArea.classList.remove('game-running');
+                }
+            });
+
+            // 重新初始化轨道和星球
+            players.forEach(player => {
+                createOrbitsAndPlanets(player);
+            });
+
+            // 如果有指定开始游戏的玩家，立即开始游戏
+            if (startingPlayerId !== null) {
+                const player = players.find(p => p.id === startingPlayerId);
+                if (player) {
+                    player.gameRunning = true;
+                    player.hasStartedGame = true;
+                    player.lastSwitchTime = Date.now();
+                    const actionDisplay = document.getElementById(`action-display-${player.id}`);
+                    if (actionDisplay) {
+                        actionDisplay.textContent = "游戏进行中";
+                    }
+                    const playerArea = document.querySelector(`.player-area:nth-child(${player.id})`);
+                    if (playerArea) {
+                        playerArea.classList.add('game-running');
+                    }
+                }
+            }
+        }
+        
+        // 游戏主循环
+        function gameLoop() {
+            // 继续运行游戏循环，但是只处理正在运行的玩家
+            players.forEach(player => {
+                const canvas = document.getElementById(`game-canvas-${player.id}`);
+                if (!canvas) return;
+                canvas.width = player.gameArea.offsetWidth;
+                canvas.height = player.gameArea.offsetHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (player.gameRunning) {
+                    if (!isOrbitSwitching) {
+                        updateCharacterPosition(player);
+                    }
+                    updateObjects(player);
+                } else {
+                    // 游戏未开始，显示对应检测区域的视频画面
+                    drawPlayerDetectionAreaVideo(player, ctx);
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 绘制玩家检测区域对应的视频画面
+        function drawPlayerDetectionAreaVideo(player, ctx) {
+            const video = document.getElementById('camera');
+            if (!video || !video.videoWidth || !video.videoHeight) {
+                // 如果视频未就绪，显示等待提示
+                ctx.fillStyle = "#1a1a2e";
+                ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "14px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("等待摄像头...", ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
+
+            // 获取玩家的检测区域配置
+            const playerConfig = gameFramework ? gameFramework.playerConfigs.find(c => c.id === player.id) : null;
+            let detectionArea = playerConfig ? playerConfig.detectionArea : { x1: 0, y1: 0, x2: 1, y2: 1 };
+
+            // 计算视频源区域（考虑自拍模式的镜像）
+            const selfieMode = gameFramework ? gameFramework.options.selfieMode : true;
+            
+            // 如果是自拍模式，需要镜像玩家检测区域（因为视频是左右镜像的）
+            // 原来的顺序 1,2,3,4 变成 4,3,2,1
+            let finalDetectionArea = detectionArea;
+            if (selfieMode) {
+                // 镜像x坐标：x1' = 1 - x2, x2' = 1 - x1
+                finalDetectionArea = {
+                    x1: 1 - detectionArea.x2,
+                    y1: detectionArea.y1,
+                    x2: 1 - detectionArea.x1,
+                    y2: detectionArea.y2
+                };
+            }
+
+            let sourceX = finalDetectionArea.x1 * video.videoWidth;
+            let sourceY = finalDetectionArea.y1 * video.videoHeight;
+            let sourceWidth = (finalDetectionArea.x2 - finalDetectionArea.x1) * video.videoWidth;
+            let sourceHeight = (finalDetectionArea.y2 - finalDetectionArea.y1) * video.videoHeight;
+
+            // 如果是自拍模式，镜像视频
+            ctx.save();
+            if (selfieMode) {
+                ctx.translate(ctx.canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+
+            // 绘制视频区域
+            try {
+                ctx.drawImage(
+                    video,
+                    sourceX, sourceY, sourceWidth, sourceHeight,
+                    0, 0, ctx.canvas.width, ctx.canvas.height
+                );
+            } catch (e) {
+                console.log('视频绘制暂不可用');
+            }
+
+            ctx.restore();
+
+            // 绘制边框提示
+            ctx.strokeStyle = "#00ff00";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(5, 5, ctx.canvas.width - 10, ctx.canvas.height - 10);
+
+            // 绘制玩家提示文字
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(10, 10, ctx.canvas.width - 20, 30);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(`玩家${player.id} - 举起右手开始`, ctx.canvas.width / 2, 30);
+        }
+        
+        
+ 
+        
+        // 更新物体位置
+        function updateObjects(player) {
+            if (!player.character || !player.gameRunning) return;
+            
+            const gameArea = player.gameArea;
+            const centerX = gameArea.offsetWidth / 2;
+            const centerY = gameArea.offsetHeight / 2;
+            const baseRadius = Math.min(centerX, centerY) * 0.2;
+            
+            player.objects.forEach((obj, index) => {
+                if (isSlidingImageVisible) {
+                    obj.speed = obj.originalSpeed / 2;
+                } else {
+                    obj.speed = obj.originalSpeed;
+                }
+                
+                if (isObjectsPaused) {
+                    obj.speed = 0;
+                }
+                
+ 
+            });
+        }
+        
+      
+ 
+        
+        // 更新玩家积分
+        function updatePlayerScore(player, points) {
+            // 更新积分
+            player.score += points;
+            // 确保积分不会小于0
+            if (player.score < 0) {
+                player.score = 0;
+            }
+ 
+            player.speedMultiplier = Math.min(player.speedMultiplier * 1.05, 4); // 最多加速到3倍
+
+            // 更新积分显示
+            const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+            if (scoreDisplay) {
+                scoreDisplay.textContent = `积分: ${player.score}`;
+                // 添加积分变动动画
+                scoreDisplay.classList.add('score-change');
+                setTimeout(() => {
+                    scoreDisplay.classList.remove('score-change');
+                }, 500);
+            }
+        }
+        
+        // 显示弹幕
+        function showMessage(player, message) {
+            const characterRect = player.character.getBoundingClientRect();
+            const gameAreaRect = player.gameArea.getBoundingClientRect();
+            
+            const messageElement = document.createElement('div');
+            messageElement.className = '弹幕';
+            messageElement.textContent = message;
+            messageElement.style.left = `${characterRect.left - gameAreaRect.left + characterRect.width / 2}px`;
+            messageElement.style.top = `${characterRect.top - gameAreaRect.top - 50}px`;
+            messageElement.style.transform = 'translateX(-50%)';
+            
+            player.gameArea.appendChild(messageElement);
+            
+            setTimeout(() => {
+                if (messageElement.parentNode) {
+                    messageElement.parentNode.removeChild(messageElement);
+                }
+            }, 2000);
+        }
+        
+        // 初始化游戏
+        initGame();
+    </script>
+</body>
+</html>

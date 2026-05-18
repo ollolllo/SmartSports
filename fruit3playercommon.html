@@ -1,0 +1,935 @@
+﻿﻿﻿﻿﻿﻿﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="screen-orientation" content="landscape">
+    <meta name="x5-orientation" content="landscape">
+    <meta name="x5-fullscreen" content="true">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>水果忍者 - 3人版（底部布局）</title>
+    <script src="mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="mediapipe/control_utils/control_utils.js"></script>
+    <script src="mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="mediapipe/pose.js"></script>
+    <script>
+        window.ENABLE_GAME_LOG = false;
+
+        if (!window.ENABLE_GAME_LOG) {
+            console.log = function () {};
+            console.debug = function () {};
+        }
+    </script>
+    <script src="common/mediapipe_action_manager.js"></script>
+    <link rel="stylesheet" href="common/game-ranking.css">
+
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { font-family: 'Arial', sans-serif; background-color: #f0f8ff; overflow: hidden; width: 100%; height: 100%; }
+        @supports (height: 100dvh) { body { height: 100dvh; } }
+        .game-container { position: relative; width: 100%; height: 100%; background-image: linear-gradient(to bottom, #87CEEB, #E0F7FA); overflow: hidden; }
+        .players-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: space-around; align-items: flex-start; padding: 20px; gap: 20px; }
+        .player-area { position: relative; flex: 1; height: 100%; border: 2px solid rgba(255,255,255,0.3); border-radius: 10px; background-color: rgba(255,255,255,0.1); overflow: hidden; display: flex; flex-direction: column; align-items: center; padding-top: 10px; }
+        .player-avatar { width: 25%; padding-bottom: 25%; border-radius: 50%; background-size: cover; background-position: center; min-width: 80px; min-height: 80px; margin-bottom: 5px; }
+        .player-info { display: flex; justify-content: center; align-items: center; gap: 10px; font-size: 24px; margin-bottom: 10px; }
+        .player-name { font-weight: bold; color: #333; }
+        .player-score { font-weight: bold; color: red; font-size: 24px; }
+        .action-display { font-size: 12px; color: #333; background: rgba(255,255,255,0.8); padding: 2px 8px; border-radius: 8px; margin-bottom: 10px; }
+        .player-area.game-running .action-display { display: none; }
+        .game-area { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: flex-end; padding-bottom: 10px; overflow: hidden; }
+        .fruit-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        .game-timer { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, rgba(102,126,234,0.95), rgba(118,75,162,0.95)); padding: 15px 40px; border-radius: 20px; z-index: 1000; }
+        .timer-value { font-size: 48px; font-weight: bold; color: white; }
+        .camera-container {
+            position: absolute;
+            top: 50px;
+            right: 20px;
+            width: 400px;
+            height: 220px;
+            background: #000;
+            border-radius: 5px;
+            overflow: hidden;
+            z-index: 20;
+        }
+
+        #camera {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        #pose-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+        .action-display { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 5px; font-size: 14px; font-weight: bold; z-index: 100; }
+        .start-button { position: absolute; top: 50px; left: 20px; height: 36px; padding: 0 16px; background: #4CAF50; color: white; border: none; border-radius: 5px; font-size: 14px; font-weight: bold; z-index: 9999; }
+
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div style="display: none;" class="camera-container">
+            <video id="camera" autoplay playsinline></video>
+            <canvas id="pose-canvas"></canvas>
+        </div>
+        <div id="action-display" class="action-display">等待识别...</div>
+        
+        <div class="players-container">
+            <div class="player-area">
+                <div class="player-avatar" id="player-avatar-1"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家1</span>
+                    <span class="player-score" id="score-display-1">积分: 0</span>
+                </div>
+                <div class="action-display" id="action-display-1">举起右手开始</div>
+                <div class="game-area" id="game-area-1">
+                    <canvas id="fruit-canvas-1" class="fruit-canvas"></canvas>
+                </div>
+            </div>
+            <div class="player-area">
+                <div class="player-avatar" id="player-avatar-2"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家2</span>
+                    <span class="player-score" id="score-display-2">积分: 0</span>
+                </div>
+                <div class="action-display" id="action-display-2">举起右手开始</div>
+                <div class="game-area" id="game-area-2">
+                    <canvas id="fruit-canvas-2" class="fruit-canvas"></canvas>
+                </div>
+            </div>
+            <div class="player-area">
+                <div class="player-avatar" id="player-avatar-3"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家3</span>
+                    <span class="player-score" id="score-display-3">积分: 0</span>
+                </div>
+                <div class="action-display" id="action-display-3">举起右手开始</div>
+                <div class="game-area" id="game-area-3">
+                    <canvas id="fruit-canvas-3" class="fruit-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-timer" class="game-timer" style="display: none;">
+            <div class="timer-content">
+                <div class="timer-label">剩余时间</div>
+                <div class="timer-value" id="timer-value">60</div>
+            </div>
+        </div>
+
+        <button style="display:none;" class="start-button" id="start-button">开始游戏</button>
+    </div>
+
+    <script>
+        let gameRunning = false;
+        let players = [];
+        let GAME_DURATION = 60;
+        let gameTimer = null;
+        let gameTimeLeft = GAME_DURATION;
+
+        let RESTART_COUNTDOWN = 5;
+        let restartTimer = null;
+        let restartTimeLeft = RESTART_COUNTDOWN;
+        let useUpperBodyJumpDetection = true;
+        let currentTwoHandsUp = false;
+        let lastTwoHandsTime = 0;
+        let difficulty = 1;
+        let gameStarter = null;
+        let gameFramework = null;
+ 
+        const FRUIT_TYPES = [
+            { name: 'apple', emoji: '🍎', color: '#ff4444', points: 10, size: 45 },
+            { name: 'orange', emoji: '🍊', color: '#ff8800', points: 10, size: 45 },
+            { name: 'watermelon', emoji: '🍉', color: '#44ff44', points: 15, size: 45 },
+            { name: 'grape', emoji: '🍇', color: '#8844ff', points: 20, size: 45 },
+            { name: 'banana', emoji: '🍌', color: '#ffff44', points: 10, size: 45 },
+            { name: 'strawberry', emoji: '🍓', color: '#ff4466', points: 15, size: 45 },
+            { name: 'pineapple', emoji: '🍍', color: '#ffff00', points: 25, size: 45 }
+        ];
+
+        const FRUIT_AREA_WIDTH = 160;
+        const FRUIT_AREA_LEFT = 0;
+        const FRUIT_AREA_RIGHT = 160;
+        const SLICE_ZONE_TOP = 0;
+        const SLICE_ZONE_BOTTOM = Infinity;
+        const ACTION_COOLDOWN = 300;
+
+        function createPlayer(id) {
+            return {
+                id: id,
+                gameArea: document.getElementById(`game-area-${id}`),
+                fruits: [],
+                particles: [],
+                rightBladeTrail: [],
+                leftBladeTrail: [],
+                lastRightHandPosition: null,
+                lastLeftHandPosition: null,
+                lastRightHandTime: 0,
+                lastLeftHandTime: 0,
+                currentAction: "举起右手开始",
+                gameRunning: false,
+                score: 0,
+                currentRightHandUp: false,
+                currentRightHandPosition: null,
+                currentLeftHandPosition: null,
+                avatar: '',
+                lastSpawnTime: 0,
+                spawnInterval: 900,
+                combo: 0,
+                comboTimer: null
+            };
+        }
+
+        class BladePoint {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.time = Date.now();
+            }
+        }
+
+        class Fruit {
+            constructor(canvasWidth) {
+                this.canvasWidth = canvasWidth || 300;
+                this.type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
+                this.x = Math.random() * (this.canvasWidth - this.type.size);
+                this.y = -this.type.size;
+                this.vy = 2 + Math.random() * 2 * difficulty;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.rotation = 0;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.2;
+                this.sliced = false;
+                this.sliceAngle = 0;
+            }
+            update() {
+                this.y += this.vy;
+                this.x += this.vx;
+                this.rotation += this.rotationSpeed;
+                if (this.x < 0) this.x = 0;
+                if (this.x > this.canvasWidth - this.type.size) this.x = this.canvasWidth - this.type.size;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x + this.type.size / 2, this.y + this.type.size / 2);
+                ctx.rotate(this.rotation);
+                ctx.font = `${this.type.size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.type.emoji, 0, 0);
+                ctx.restore();
+            }
+            containsPoint(x, y) {
+                const centerX = this.x + this.type.size / 2;
+                const centerY = this.y + this.type.size / 2;
+                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                return distance < this.type.size / 2 + 20;
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 15;
+                this.vy = (Math.random() - 0.5) * 15 - 5;
+                this.color = color;
+                this.life = 1;
+                this.decay = 0.02 + Math.random() * 0.02;
+                this.size = 5 + Math.random() * 10;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.3;
+                this.life -= this.decay;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, Math.max(0, this.size * this.life), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        function spawnFruitForPlayer(player) {
+            const now = Date.now();
+            if (now - player.lastSpawnTime > player.spawnInterval) {
+                const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+                const canvasWidth = canvas ? canvas.width : 300;
+                player.fruits.push(new Fruit(canvasWidth));
+                player.lastSpawnTime = now;
+
+                if (Math.random() < 0.1 * difficulty) {
+                    setTimeout(() => {
+                        if (player.gameRunning) player.fruits.push(new Fruit(canvasWidth));
+                    }, player.spawnInterval / 3);
+                }
+            }
+        }
+
+        function sliceFruitForPlayer(player, handX, handY) {
+            const gameX = handX;
+            const gameY = handY;
+
+            if (gameY < SLICE_ZONE_TOP || gameY > SLICE_ZONE_BOTTOM) {
+                return false;
+            }
+
+            for (let i = player.fruits.length - 1; i >= 0; i--) {
+                const fruit = player.fruits[i];
+                if (!fruit.sliced && fruit.containsPoint(gameX, gameY)) {
+                    fruit.sliced = true;
+
+                    const fruitCenterX = fruit.x + fruit.type.size / 2;
+                    const fruitCenterY = fruit.y + fruit.type.size / 2;
+
+                    const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+                    const ctx = canvas ? canvas.getContext('2d') : null;
+                    if (ctx) {
+                        drawLightningBolt(ctx, gameX, gameY, fruitCenterX, fruitCenterY, '#00ffff');
+                    }
+
+                    const points = currentTwoHandsUp ? fruit.type.points * 2 : fruit.type.points;
+                    player.score += points;
+                    player.combo++;
+
+                    updateFruitScoreDisplay(player.id);
+
+                    for (let j = 0; j < 15; j++) {
+                        player.particles.push(new Particle(
+                            fruit.x + fruit.type.size / 2,
+                            fruit.y + fruit.type.size / 2,
+                            fruit.type.color
+                        ));
+                    }
+
+                    player.fruits.splice(i, 1);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function updateFruitScoreDisplay(playerId) {
+            const player = players.find(p => p.id === playerId);
+            if (player) {
+                const scoreDisplay = document.getElementById(`score-display-${playerId}`);
+                if (scoreDisplay) {
+                    scoreDisplay.textContent = `积分: ${player.score}`;
+                }
+            }
+        }
+
+        function checkMissedFruitForPlayer(player) {
+            const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+            if (!canvas) return;
+            
+            const canvasHeight = canvas.height;
+            for (let i = player.fruits.length - 1; i >= 0; i--) {
+                if (player.fruits[i].y > canvasHeight) {
+                    player.fruits.splice(i, 1);
+                }
+            }
+        }
+
+        function checkHandSliceForPlayer(player) {
+            if (!player.gameRunning) return;
+
+            const now = Date.now();
+
+            if (player.currentRightHandPosition) {
+                const handX = player.currentRightHandPosition.x;
+                const handY = player.currentRightHandPosition.y;
+
+                if (player.lastRightHandPosition) {
+                    const dx = handX - player.lastRightHandPosition.x;
+                    const dy = handY - player.lastRightHandPosition.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > 10) {
+                        player.rightBladeTrail.push(new BladePoint(handX, handY));
+                    }
+
+                    const dt = now - player.lastRightHandTime;
+                    if (dt > 0) {
+                        const speed = distance / dt * 1000;
+                        if (speed > 50) {
+                            sliceFruitForPlayer(player, handX, handY);
+                        }
+                    }
+                } else {
+                    player.rightBladeTrail.push(new BladePoint(handX, handY));
+                }
+
+                player.lastRightHandPosition = { x: handX, y: handY };
+                player.lastRightHandTime = now;
+            } else {
+                player.lastRightHandPosition = null;
+            }
+
+            if (player.currentLeftHandPosition) {
+                const handX = player.currentLeftHandPosition.x;
+                const handY = player.currentLeftHandPosition.y;
+
+                if (player.lastLeftHandPosition) {
+                    const dx = handX - player.lastLeftHandPosition.x;
+                    const dy = handY - player.lastLeftHandPosition.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > 10) {
+                        player.leftBladeTrail.push(new BladePoint(handX, handY));
+                    }
+
+                    const dt = now - player.lastLeftHandTime;
+                    if (dt > 0) {
+                        const speed = distance / dt * 1000;
+                        if (speed > 50) {
+                            sliceFruitForPlayer(player, handX, handY);
+                        }
+                    }
+                } else {
+                    player.leftBladeTrail.push(new BladePoint(handX, handY));
+                }
+
+                player.lastLeftHandPosition = { x: handX, y: handY };
+                player.lastLeftHandTime = now;
+            } else {
+                player.lastLeftHandPosition = null;
+            }
+        }
+
+        function drawBladeTrail(player, ctx) {
+            const now = Date.now();
+            
+            if (player.rightBladeTrail) {
+                player.rightBladeTrail = player.rightBladeTrail.filter(p => now - p.time < 200);
+            }
+            if (player.leftBladeTrail) {
+                player.leftBladeTrail = player.leftBladeTrail.filter(p => now - p.time < 200);
+            }
+            
+            const rightColor = '#ffff00';
+            const leftColor = '#00ffff';
+            
+            if (player.rightBladeTrail && player.rightBladeTrail.length >= 2) {
+                for (let i = 0; i < player.rightBladeTrail.length - 1; i++) {
+                    const p1 = player.rightBladeTrail[i];
+                    const p2 = player.rightBladeTrail[i + 1];
+                    drawLightningBolt(ctx, p1.x, p1.y, p2.x, p2.y, rightColor);
+                }
+                
+                const first = player.rightBladeTrail[0];
+                const last = player.rightBladeTrail[player.rightBladeTrail.length - 1];
+                drawLightningBolt(ctx, first.x, first.y, last.x, last.y, rightColor);
+            }
+            
+            if (player.leftBladeTrail && player.leftBladeTrail.length >= 2) {
+                for (let i = 0; i < player.leftBladeTrail.length - 1; i++) {
+                    const p1 = player.leftBladeTrail[i];
+                    const p2 = player.leftBladeTrail[i + 1];
+                    drawLightningBolt(ctx, p1.x, p1.y, p2.x, p2.y, leftColor);
+                }
+                
+                const first = player.leftBladeTrail[0];
+                const last = player.leftBladeTrail[player.leftBladeTrail.length - 1];
+                drawLightningBolt(ctx, first.x, first.y, last.x, last.y, leftColor);
+            }
+        }
+
+        function drawLightningBolt(ctx, x1, y1, x2, y2, color) {
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 30;
+            
+            const distance = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+            const segments = Math.max(4, Math.min(8, Math.floor(distance / 20)));
+            const maxOffset = Math.min(10, distance * 0.1);
+            
+            const dx = (x2 - x1) / segments;
+            const dy = (y2 - y1) / segments;
+            
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            
+            for (let i = 1; i < segments; i++) {
+                const offsetX = (Math.random() - 0.5) * maxOffset;
+                const offsetY = (Math.random() - 0.5) * maxOffset;
+                ctx.lineTo(x1 + dx * i + offsetX, y1 + dy * i + offsetY);
+            }
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            
+            ctx.shadowBlur = 50;
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+
+        function initGame() {
+            for (let i = 1; i <= 3; i++) {
+                players.push(createPlayer(i));
+            }
+            initGameFramework();
+            startGame();
+        }
+
+        async function initGameFramework() {
+            try {
+                gameStarter = new QuickGameStarter({
+                    gameFrameworkOptions: {
+                        playerCount: 3,
+                        selfieMode: true,
+                        videoElementId: 'camera',
+                        poseCanvasId: 'pose-canvas',
+                        modelComplexity: 1,
+                        poseDetectInterval: 50, // 50毫秒 ,约 20fps
+                        poseInputScale: 0.5, // 姿态检测输入缩放比例，0.5 表示宽高减半
+                        minDetectionConfidence: 0.5,
+                        minTrackingConfidence: 0.5,
+                        useUpperBodyJumpDetection: true,
+                        actionCooldown: 300,
+                        detectionAreaTop: 0.25,
+                        detectionAreaBottom: 0.75,
+                        actionTypes: [ACTION_TYPE.RIGHT_HAND_RAISED, ACTION_TYPE.STANDING],
+                        avatarRadiusRatio: 0.1,
+                        playerDetectionConfigs: [
+                            { id: 1, detectionArea: { x1: 0.0, y1: 0.3, x2: 0.3, y2: 0.85 } },
+                            { id: 2, detectionArea: { x1: 0.35, y1: 0.3, x2: 0.65, y2: 0.85 } },
+                            { id: 3, detectionArea: { x1: 0.7, y1: 0.3, x2: 1.0, y2: 0.85 } }
+                        ]
+                    },
+                    onPlayerAction: (playerId, action, landmarks) => {
+                        handlePlayerAction(playerId, action, landmarks);
+                    },
+                    onPoseResults: (results) => {
+                        results.forEach(result => {
+                            updateHandPositions(result.playerId, result.landmarks);
+                        });
+                    },
+                    onCameraReady: () => {
+                        startGameTimer();
+                    },
+                    onError: (error) => {
+                        console.error('游戏框架错误:', error);
+                    }
+                });
+                gameFramework = await gameStarter.start(gameLoop);
+            } catch (error) {
+                console.error('游戏框架启动失败:', error);
+            }
+        }
+
+        function isRankingInteractionLocked() {
+            const rankingContainer = document.getElementById('game-rankings');
+            if (!rankingContainer) return false;
+
+            const lockedUntil = Number(rankingContainer.dataset.lockedUntil || 0);
+            return Date.now() < lockedUntil;
+        }
+
+        function handlePlayerAction(playerId, action, landmarks) {
+            if (isRankingInteractionLocked()) {
+                return;
+            }
+
+            const player = players.find(p => p.id === playerId);
+            if (!player) return;
+            player.currentAction = action;
+            
+            const actionDisplay = document.getElementById(`action-display-${playerId}`);
+            if (actionDisplay) {
+                actionDisplay.textContent = player.gameRunning ? action : "举起右手开始";
+            }
+
+            if (action === ACTION_TYPE.RIGHT_HAND_RAISED && !player.gameRunning) {
+                const closeBtn = document.getElementById('close-ranking');
+                if (closeBtn) {
+                    stopRestartCountdown();
+                    closeBtn.click();
+                }
+                togglePlayerGame(playerId);
+            }
+
+            if (action === ACTION_TYPE.BOTH_HANDS_RAISED) {
+                currentTwoHandsUp = true;
+                lastTwoHandsTime = Date.now();
+            } else {
+                if (Date.now() - lastTwoHandsTime > 500) {
+                    currentTwoHandsUp = false;
+                }
+            }
+        }
+
+        function updateHandPositions(playerId, landmarks) {
+            const player = players.find(p => p.id === playerId);
+            if (!player || !landmarks) return;
+
+            const selfieMode = gameFramework.options.selfieMode;
+            const rightWrist = landmarks[16];
+            const leftWrist = landmarks[15];
+            const rightShoulder = landmarks[12];
+            const leftShoulder = landmarks[11];
+
+            const playerConfig = gameFramework.playerConfigs.find(c => c.id === playerId);
+            const detectionArea = playerConfig ? playerConfig.detectionArea : { x1: 0, y1: 0, x2: 1, y2: 1 };
+
+            const rightWristToUse = selfieMode ? leftWrist : rightWrist;
+            const leftWristToUse = selfieMode ? rightWrist : leftWrist;
+
+            if (rightWristToUse && rightShoulder) {
+                const gameArea = player.gameArea;
+                if (gameArea) {
+                    const gameRect = gameArea.getBoundingClientRect();
+                    const relativeX = (rightWristToUse.x - detectionArea.x1) / (detectionArea.x2 - detectionArea.x1);
+                    const relativeY = (rightWristToUse.y - detectionArea.y1) / (detectionArea.y2 - detectionArea.y1);
+
+                    player.currentRightHandPosition = {
+                        x: relativeX * gameRect.width,
+                        y: relativeY * gameRect.height
+                    };
+
+                    const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+                    const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+                    player.currentRightHandUp = rightShoulder.y - rightWristToUse.y > armRaisedThreshold;
+                }
+            } else {
+                player.currentRightHandPosition = null;
+                player.currentRightHandUp = false;
+            }
+
+            if (leftWristToUse && leftShoulder) {
+                const gameArea = player.gameArea;
+                if (gameArea) {
+                    const gameRect = gameArea.getBoundingClientRect();
+                    const relativeX = (leftWristToUse.x - detectionArea.x1) / (detectionArea.x2 - detectionArea.x1);
+                    const relativeY = (leftWristToUse.y - detectionArea.y1) / (detectionArea.y2 - detectionArea.y1);
+
+                    player.currentLeftHandPosition = {
+                        x: relativeX * gameRect.width,
+                        y: relativeY * gameRect.height
+                    };
+                }
+            } else {
+                player.currentLeftHandPosition = null;
+            }
+        }
+
+        function capturePlayerAvatar(playerIndex) {
+            if (!gameStarter) return;
+
+            const avatarDataUrl = gameStarter.captureAvatar(playerIndex);
+            if (avatarDataUrl) {
+                const player = players.find(p => p.id === playerIndex);
+                if (player) {
+                    player.avatar = avatarDataUrl;
+                    console.log(`Updated avatar for player ${playerIndex}`);
+                    
+                    const avatarElement = document.getElementById(`player-avatar-${playerIndex}`);
+                    if (avatarElement) {
+                        avatarElement.style.backgroundImage = `url('${avatarDataUrl}')`;
+                    }
+                }
+            }
+        }
+
+        function togglePlayerGame(playerId) {
+            const player = players.find(p => p.id === playerId);
+            if (!player) return;
+
+            player.gameRunning = true;
+            player.score = 0;
+            player.fruits = [];
+            player.particles = [];
+            player.rightBladeTrail = [];
+            player.leftBladeTrail = [];
+            player.lastRightHandPosition = null;
+            player.lastLeftHandPosition = null;
+            updateFruitScoreDisplay(playerId);
+
+            const playerArea = document.querySelector(`.player-area:nth-child(${playerId})`);
+            if (playerArea) {
+                playerArea.classList.add('game-running');
+            }
+
+            capturePlayerAvatar(playerId);
+
+            const gameArea = player.gameArea;
+            if (gameArea) {
+                const rect = gameArea.getBoundingClientRect();
+                const canvas = document.getElementById(`fruit-canvas-${playerId}`);
+                if (canvas) {
+                    canvas.width = rect.width;
+                    canvas.height = rect.height;
+                }
+            }
+        }
+
+        function gameLoop() {
+            players.forEach(player => {
+                const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+                if (!canvas) return;
+                canvas.width = player.gameArea.offsetWidth;
+                canvas.height = player.gameArea.offsetHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (player.gameRunning) {
+                    ctx.fillStyle = "#0a0a1a";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    spawnFruitForPlayer(player);
+
+                    for (let i = player.fruits.length - 1; i >= 0; i--) {
+                        player.fruits[i].update();
+                        player.fruits[i].draw(ctx);
+                    }
+
+                    for (let i = player.particles.length - 1; i >= 0; i--) {
+                        player.particles[i].update();
+                        player.particles[i].draw(ctx);
+                        if (player.particles[i].life <= 0) {
+                            player.particles.splice(i, 1);
+                        }
+                    }
+
+                    drawBladeTrail(player, ctx);
+
+                    checkMissedFruitForPlayer(player);
+                    checkHandSliceForPlayer(player);
+                } else {
+                    // 游戏未开始，显示对应检测区域的视频画面
+                    drawPlayerDetectionAreaVideo(player, ctx);
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 绘制玩家检测区域对应的视频画面
+        function drawPlayerDetectionAreaVideo(player, ctx) {
+            const video = document.getElementById('camera');
+            if (!video || !video.videoWidth || !video.videoHeight) {
+                // 如果视频未就绪，显示等待提示
+                ctx.fillStyle = "#1a1a2e";
+                ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "14px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("等待摄像头...", ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
+
+            // 获取玩家的检测区域配置
+            const playerConfig = gameFramework ? gameFramework.playerConfigs.find(c => c.id === player.id) : null;
+            let detectionArea = playerConfig ? playerConfig.detectionArea : { x1: 0, y1: 0, x2: 1, y2: 1 };
+
+            // 计算视频源区域（考虑自拍模式的镜像）
+            const selfieMode = gameFramework ? gameFramework.options.selfieMode : true;
+            
+            // 如果是自拍模式，需要镜像玩家检测区域（因为视频是左右镜像的）
+            // 原来的顺序 1,2,3,4 变成 4,3,2,1
+            let finalDetectionArea = detectionArea;
+            if (selfieMode) {
+                // 镜像x坐标：x1' = 1 - x2, x2' = 1 - x1
+                finalDetectionArea = {
+                    x1: 1 - detectionArea.x2,
+                    y1: detectionArea.y1,
+                    x2: 1 - detectionArea.x1,
+                    y2: detectionArea.y2
+                };
+            }
+
+            let sourceX = finalDetectionArea.x1 * video.videoWidth;
+            let sourceY = finalDetectionArea.y1 * video.videoHeight;
+            let sourceWidth = (finalDetectionArea.x2 - finalDetectionArea.x1) * video.videoWidth;
+            let sourceHeight = (finalDetectionArea.y2 - finalDetectionArea.y1) * video.videoHeight;
+
+            // 如果是自拍模式，镜像视频
+            ctx.save();
+            if (selfieMode) {
+                ctx.translate(ctx.canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+
+            // 绘制视频区域
+            try {
+                ctx.drawImage(
+                    video,
+                    sourceX, sourceY, sourceWidth, sourceHeight,
+                    0, 0, ctx.canvas.width, ctx.canvas.height
+                );
+            } catch (e) {
+                console.log('视频绘制暂不可用');
+            }
+
+            ctx.restore();
+
+            // 绘制边框提示
+            ctx.strokeStyle = "#00ff00";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(5, 5, ctx.canvas.width - 10, ctx.canvas.height - 10);
+
+            // 绘制玩家提示文字
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(10, 10, ctx.canvas.width - 20, 30);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(`玩家${player.id} - 举起右手开始`, ctx.canvas.width / 2, 30);
+        }
+
+        function startGame() {
+            gameLoop();
+        }
+
+        function startGameTimer() {
+            const timerElement = document.getElementById('game-timer');
+            const timerValue = document.getElementById('timer-value');
+
+            if (timerElement) {
+                timerElement.style.display = 'flex';
+            }
+
+            gameTimeLeft = GAME_DURATION;
+            timerValue.textContent = gameTimeLeft;
+
+            gameTimer = setInterval(() => {
+                gameTimeLeft--;
+                timerValue.textContent = gameTimeLeft;
+
+                if (gameTimeLeft <= 10) {
+                    timerValue.style.color = '#ff4444';
+                    timerValue.style.textShadow = '2px 2px 4px rgba(255, 0, 0, 0.5)';
+                }
+
+                // 在倒计时过程中检查是否有玩家开始游戏
+                const anyPlayerStarted = players.some(p => p.gameRunning);
+                if (!anyPlayerStarted && (GAME_DURATION - gameTimeLeft) >= 8) {
+                    // 8秒内没有玩家开始游戏，返回列表页
+                    stopGameTimer();
+                    window.location.href = '/smartgames.html';
+                    return;
+                }
+
+                if (gameTimeLeft <= 0) {
+                    endGameByTimer();
+                }
+            }, 1000);
+        }
+
+        function stopGameTimer() {
+            if (gameTimer) {
+                clearInterval(gameTimer);
+                gameTimer = null;
+            }
+
+            const timerElement = document.getElementById('game-timer');
+            if (timerElement) {
+                timerElement.style.display = 'none';
+            }
+        }
+
+        function endGameByTimer() {
+            stopGameTimer();
+
+            players.forEach(player => {
+                player.gameRunning = false;
+                if (player.fruits) {
+                    player.fruits = [];
+                }
+            });
+
+            showGameRankings();
+        }
+
+        function showGameRankings() {
+            const gameRanking = new GameRanking();
+            gameRanking.showRankings(players, {
+                topCount: 3,
+                title: '游戏排名',
+                restartCountdown: 6,
+                minDisplayTime: 2000,
+                onRestart: () => {
+                    restartGameFromRanking();
+                },
+                returnUrl: '/smartgames.html'
+            });
+        }
+
+        function restartGameFromRanking() {
+            stopRestartCountdown();
+
+            const rankingContainer = document.getElementById('game-rankings');
+            if (rankingContainer) {
+                document.body.removeChild(rankingContainer);
+            }
+
+            players.forEach(player => {
+                player.score = 0;
+                player.combo = 0;
+                player.fruits = [];
+                player.particles = [];
+                player.rightBladeTrail = [];
+                player.leftBladeTrail = [];
+                player.gameRunning = false;
+                player.lastSpawnTime = Date.now();
+                player.currentRightHandUp = false;
+
+                const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+                if (scoreDisplay) {
+                    scoreDisplay.textContent = `积分: 0`;
+                }
+
+                const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+
+                const actionDisplay = document.getElementById(`action-display-${player.id}`);
+                if (actionDisplay) {
+                    actionDisplay.style.display = 'none';
+                }
+            });
+
+            gameRunning = true;
+            startGameTimer();
+        }
+
+        function stopRestartCountdown() {
+            if (restartTimer) {
+                clearInterval(restartTimer);
+                restartTimer = null;
+            }
+        }
+
+        function checkAnyPlayerRightHandUp() {
+            for (let i = 0; i < players.length; i++) {
+                if (players[i].currentRightHandUp) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>

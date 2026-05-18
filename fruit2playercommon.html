@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="screen-orientation" content="landscape">
+    <meta name="x5-orientation" content="landscape">
+    <meta name="x5-fullscreen" content="true">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>水果忍者 - 2人版</title>
+    <script src="mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="mediapipe/control_utils/control_utils.js"></script>
+    <script src="mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="mediapipe/pose.js"></script>
+    <script>
+        window.ENABLE_GAME_LOG = false;
+
+        if (!window.ENABLE_GAME_LOG) {
+            console.log = function () {};
+            console.debug = function () {};
+        }
+    </script>
+    <script src="common/mediapipe_action_manager.js"></script>
+    <link rel="stylesheet" href="common/game-ranking.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* 使用dvh单位确保在移动端浏览器工具栏显示时也能完整显示 */
+        @supports (height: 100dvh) {
+            body {
+                height: 100dvh;
+            }
+        }
+        
+        /* 横屏适配 */
+        @media screen and (orientation: portrait) {
+            .game-container {
+                min-height: 400px;
+            }
+        }
+
+        .game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-image: linear-gradient(to bottom, #87CEEB, #E0F7FA);
+            overflow: hidden;
+        }
+        
+        /* 使用dvh单位确保在移动端浏览器工具栏显示时也能完整显示 */
+        @supports (height: 100dvh) {
+            .game-container {
+                height: 100dvh;
+            }
+        }
+        
+        .game-title {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: clamp(16px, 3vw, 24px);
+            font-weight: bold;
+            color: #333;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            z-index: 20;
+            margin: 0;
+            white-space: nowrap;
+        }
+        
+        /* 玩家区域容器 - 全屏横向排列 */
+        .players-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+        
+        .player-area {
+            position: relative;
+            width: 30%;
+            height: 100%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            background-color: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 10px;
+            box-sizing: border-box;
+        }
+        
+        .player-title {
+            position: absolute;
+            top: 5px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 10px;
+            border-radius: 10px;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .player-avatar {
+            width: 25%;
+            padding-bottom: 25%;
+            border-radius: 50%;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            min-width: 80px;
+            min-height: 80px;
+            margin-bottom: 5px;
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            font-family: 'Microsoft YaHei', sans-serif;
+            font-size: 24px;
+            margin-bottom: 10px;
+            min-height: 30px;
+        }
+
+        .player-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* 确保player-score样式优先级 */
+        .player-info .player-score {
+            font-weight: bold;
+            color: red !important;
+            font-family: 'Microsoft YaHei', sans-serif !important;
+            font-size: 24px !important;
+        }
+
+        /* 确保score-display样式优先级 */
+        .player-info #score-display-1,
+        .player-info #score-display-2,
+        .player-info #score-display-3,
+        .player-info #score-display-4 {
+            font-weight: bold;
+            color: red !important;
+            font-family: 'Microsoft YaHei', sans-serif !important;
+            font-size: 24px !important;
+        }
+
+        .score-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: red;
+            white-space: nowrap;
+            text-align: center;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+
+        .score-change {
+            animation: score-animation 0.5s ease-out;
+        }
+
+        @keyframes score-animation {
+            0% {
+                transform: translateX(-50%) scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: translateX(-50%) scale(1.2);
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-50%) scale(1);
+                opacity: 1;
+            }
+        }
+
+        .action-display {
+            font-size: 12px;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 2px 8px;
+            border-radius: 8px;
+            z-index: 20;
+            white-space: nowrap;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        /* 游戏开始时隐藏action-display */
+        .player-area.game-running .action-display {
+            display: none;
+        }
+
+        .game-area {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 10px;
+            overflow: hidden;
+        }
+
+        /* 游戏倒计时显示 */
+        .game-timer {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.95) 0%, rgba(118, 75, 162, 0.95) 100%);
+            padding: 15px 40px;
+            border-radius: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .timer-content {
+            text-align: center;
+            color: white;
+        }
+
+        .timer-label {
+            font-size: 14px;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+
+        .timer-value {
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .fruit-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .character {
+            position: relative;
+            width: 40%;
+            height: 40%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-color: transparent;
+            z-index: 10;
+        }
+
+        .object {
+            position: absolute;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            z-index: 5;
+        }
+
+ 
+ 
+
+        .弹幕 {
+            position: absolute;
+            font-size: 2vw;
+            font-weight: bold;
+            color: #ff4500;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 20;
+            animation: float-up 2s ease-out forwards;
+        }
+
+        @keyframes float-up {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-100px);
+            }
+        }
+
+        .start-button {
+            position: absolute;
+            top: 50px;
+            left: 20px;
+            height: 36px;
+            padding: 0 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 9999;
+            min-width: 100px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            line-height: 36px;
+        }
+
+        .camera-container {
+            position: absolute;
+            top: 50px;
+            right: 20px;
+            width: 400px;
+            height: 220px;
+            background: #000;
+            border-radius: 5px;
+            overflow: hidden;
+            z-index: 20;
+        }
+
+        #camera {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        #pose-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            z-index: 100;
+        }
+
+        .action-display {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 100;
+        }
+
+        .start-button:hover {
+            background: #45a049;
+        }
+ 
+
+        /* 确保在所有屏幕尺寸上都能正常显示 */
+        @media (max-width: 1920px) {
+            .start-button {
+                font-size: 16px;
+                padding: 0 16px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .start-button {
+                font-size: 14px;
+                padding: 0 12px;
+            }
+ 
+            
+            .game-title {
+                font-size: 4vw;
+            }
+            
+            .action-display {
+                font-size: 14px;
+                padding: 6px 12px;
+            }
+            
+            .camera-container {
+                width: 20vw;
+                height: 15vw;
+            }
+            
+            .players-container {
+                padding: 60px 10px 10px 10px;
+                gap: 10px;
+            }
+            
+            .character {
+                width: 40%;
+                height: 40%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+ 
+            
+            .弹幕 {
+                font-size: 3vw;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .start-button {
+                font-size: 12px;
+                padding: 0 10px;
+                height: 36px;
+                line-height: 36px;
+            }
+            
+ 
+            
+            .game-title {
+                font-size: 5vw;
+                top: 3%;
+            }
+            
+            .action-display {
+                font-size: 12px;
+                padding: 4px 10px;
+                top: 3%;
+            }
+            
+            .camera-container {
+                width: 25vw;
+                height: 18.75vw;
+                top: 3%;
+            }
+            
+            .players-container {
+                padding: 50px 5px 5px 5px;
+                gap: 5px;
+            }
+            
+            .player-title {
+                font-size: 10px;
+                padding: 1px 5px;
+            }
+            
+            .character {
+                width: 40%;
+                height: 40%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            }
+ 
+
+            .弹幕 {
+                font-size: 4vw;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- <h1 class="game-title">金元宝和石头 - 4人版</h1> -->
+        
+        <div style="display: none;" class="camera-container">
+            <video id="camera" autoplay playsinline></video>
+            <canvas id="pose-canvas"></canvas>
+        </div>
+        
+        <div id="action-display" class="action-display">等待识别...</div>
+        
+ 
+ 
+           <!-- 4个玩家区域 - 全屏横向排列 -->
+        <div class="players-container" id="players-container">
+            <!-- 玩家1 -->
+            <div class="player-area">
+                <div class="player-avatar" id="player-avatar-1"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家1</span>
+                    <span class="player-score" id="score-display-1">积分: 0</span>
+                </div>
+                <div class="action-display" id="action-display-1">举起右手开始</div>
+                <div class="game-area" id="game-area-1">
+                    <canvas id="fruit-canvas-1" class="fruit-canvas"></canvas>
+ 
+                </div>
+            </div>
+            
+            <!-- 玩家2 -->
+            <div class="player-area">
+                <div class="player-avatar" id="player-avatar-2"></div>
+                <div class="player-info">
+                    <span class="player-name">玩家2</span>
+                    <span class="player-score" id="score-display-2">积分: 0</span>
+                </div>
+                <div class="action-display" id="action-display-2">举起右手开始</div>
+                <div class="game-area" id="game-area-2">
+                    <canvas id="fruit-canvas-2" class="fruit-canvas"></canvas>
+                    <!-- <div class="character" id="character-2">
+                        <img id="expression-image-2" src="" alt="表情" style="width: 100%; height: 100%; object-fit: contain; background-color: transparent;">
+                    </div> -->
+                </div>
+            </div>
+            
+
+        </div>
+
+        <!-- 游戏倒计时显示 -->
+        <div id="game-timer" class="game-timer" style="display: none;">
+            <div class="timer-content">
+                <div class="timer-label">剩余时间</div>
+                <div class="timer-value" id="timer-value">60</div>
+            </div>
+        </div>
+
+        <button style="display:none;" class="start-button" id="start-button">开始游戏</button>
+    </div>
+
+    <script>
+        // 游戏状态
+        let gameRunning = false;
+        let players = [];
+        let currentAction = "";
+        let isUsingMockData = false;
+
+        // QuickGameStarter 通用组件
+        let gameStarter = null;
+        let gameFramework = null;
+
+        // 游戏倒计时设置
+        let GAME_DURATION = 60; // 默认60秒，可设置
+        let gameTimer = null; // 倒计时定时器
+        let gameTimeLeft = GAME_DURATION; // 剩余时间
+
+        // 重新开始倒计时设置
+        let RESTART_COUNTDOWN = 5;
+        let restartTimer = null;
+        let restartTimeLeft = RESTART_COUNTDOWN;
+
+        // 跳跃判断方式开关：true 为基于上半身，false 为基于下半身（默认）
+        let useUpperBodyJumpDetection = true;
+        
+        // 共用滑动图片状态
+        let sharedSlidingImage = null;
+        let isSlidingImageVisible = false;
+        let isSlidingPaused = false;
+        let isObjectsPaused = false;
+        let isJumpDisabled = false;
+        let isInProximity = false;
+        
+        // 游戏参数
+        const gameContainer = document.querySelector('.game-container');
+        
+        // 动作识别相关
+        // let actionCapture = null;
+        
+        // ==================== 游戏配置 ====================
+        // 玩家数量
+        const PLAYER_COUNT = 2;
+
+        // 每个玩家的区域配置
+        // x/y 范围：0~1（百分比）
+        // detectionArea: 从视频中截取该玩家动作的区域
+
+        const PLAYER_DETECTION_CONFIG = [
+                { id: 1, detectionArea: { x1: 0.15, y1: 0.3, x2: 0.45, y2: 0.8 } },   
+                { id: 2, detectionArea: { x1: 0.55, y1: 0.3, x2: 0.85, y2: 0.8 } }  
+            ];
+
+        // 根据手腕x坐标查找对应的玩家配置
+        function getPlayerConfigByWristX(wristX) {
+            for (const config of PLAYER_DETECTION_CONFIG) {
+                const area = config.detectionArea;
+                if (wristX >= area.x1 && wristX < area.x2) {
+                    // if (wristX >= area.x1 && wristX <= area.x2) {
+                    return config;
+                }
+            }
+            return null;
+        }
+        // ==================== 配置结束 ====================
+
+        // 玩家数据结构
+        function createPlayer(id) {
+            return {
+                id: id,                           // 玩家ID (1或2)
+                gameArea: document.getElementById(`game-area-${id}`),   // 游戏区域DOM元素
+                character: document.getElementById(`character-${id}`), // 角色DOM元素
+                objects: [],                      // 场景物体数组(可扩展)
+                fruits: [],                       // 水果数组
+                particles: [],                     // 粒子特效数组
+                rightBladeTrail: [],               // 右手刀光轨迹
+                leftBladeTrail: [],                // 左手刀光轨迹
+                lastRightHandPosition: null,      // 右手上一帧位置
+                lastLeftHandPosition: null,        // 左手上一帧位置
+                lastRightHandTime: 0,               // 右手上次检测时间
+                lastLeftHandTime: 0,               // 左手上次检测时间
+                combo: 0,                          // 连击数
+                comboTimer: null,                  // 连击计时器
+                lastSpawnTime: 0,                  // 上次水果生成时间
+                spawnInterval: 800,                 // 水果生成间隔(ms)
+                currentAction: "举起右手开始",      // 当前检测到的动作
+                gameRunning: false,                // 游戏是否运行中
+                score: 0,                          // 当前积分
+                currentRightHandUp: false,          // 右手是否举起
+                avatar: '',                        // 玩家头像
+                isCollisionExpression: false       // 是否触发碰撞表情
+            };
+        }
+
+        // 水果忍者游戏参数
+        const FRUIT_TYPES = [
+            { name: 'apple', emoji: '🍎', color: '#ff4444', points: 10, size: 50 },
+            { name: 'orange', emoji: '🍊', color: '#ff8800', points: 10, size: 50 },
+            { name: 'watermelon', emoji: '🍉', color: '#44ff44', points: 15, size: 50 },
+            { name: 'grape', emoji: '🍇', color: '#8844ff', points: 20, size: 50 },
+            { name: 'banana', emoji: '🍌', color: '#ffff44', points: 10, size: 50 },
+            { name: 'strawberry', emoji: '🍓', color: '#ff4466', points: 15, size: 50 },
+            { name: 'pineapple', emoji: '🍍', color: '#ffff00', points: 25, size: 50 }
+        ];
+
+        // const FRUIT_AREA_WIDTH = 160;    // 水果区域宽度(px)
+        // const FRUIT_AREA_LEFT = 0;       // 水果区域左边界
+        // const FRUIT_AREA_RIGHT = 160;    // 水果区域右边界
+        const SLICE_ZONE_TOP = 0;        // 切割区域上边界
+        const SLICE_ZONE_BOTTOM = Infinity;  // 切割区域下边界(无限制)
+        // const ACTION_COOLDOWN = 300;     // 动作检测冷却时间(ms)
+
+        let currentTwoHandsUp = false;   // 当前双手举起状态
+        let lastTwoHandsTime = 0;        // 上次双手举起时间
+        let difficulty = 1;              // 游戏难度系数，越大越难，速度越快
+
+        // 刀光轨迹点类 - 记录手部移动的轨迹点
+        class BladePoint {
+            constructor(x, y) {
+                this.x = x;      // X坐标
+                this.y = y;      // Y坐标
+                this.time = Date.now();  // 时间戳（用于判断轨迹是否过期）
+            }
+        }
+
+        // 水果类 - 负责水果的生成、移动、绘制和碰撞检测
+        class Fruit {
+            constructor(canvasWidth) {
+                this.canvasWidth = canvasWidth || 300;  // 画布宽度
+                this.type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)]; // 随机水果类型
+                this.x = Math.random() * (this.canvasWidth - this.type.size);  // 初始X位置
+                this.y = -this.type.size;  // 初始Y位置(从顶部外开始)
+                this.vy = 2 + Math.random() * 2 * difficulty;  // 垂直速度(下落速度,受难度影响)
+                this.vx = (Math.random() - 0.5) * 2;  // 水平速度(轻微左右摆动)
+                this.rotation = 0;  // 当前旋转角度
+                this.rotationSpeed = (Math.random() - 0.5) * 0.2;  // 旋转速度
+                this.sliced = false;  // 是否已被切割
+                this.sliceAngle = 0;  // 切割角度
+            }
+
+            // 更新水果位置
+            update() {
+                this.y += this.vy;  // 下落
+                this.x += this.vx;  // 左右移动
+                this.rotation += this.rotationSpeed;  // 旋转
+
+                // 边界检测：防止水果移出画布
+                if (this.x < 0) this.x = 0;
+                if (this.x > this.canvasWidth - this.type.size) this.x = this.canvasWidth - this.type.size;
+            }
+
+            // 绘制水果
+            draw(ctx) {
+                ctx.save();
+                // 移动到水果中心点并旋转
+                ctx.translate(this.x + this.type.size / 2, this.y + this.type.size / 2);
+                ctx.rotate(this.rotation);
+
+                // 绘制水果Emoji
+                ctx.font = `${this.type.size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.type.emoji, 0, 0);
+
+                ctx.restore();
+
+                // 被切割后：在水果上画白色对角线
+                if (this.sliced) {
+                    ctx.save();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x - 20, this.y - 20);
+                    ctx.lineTo(this.x + 20, this.y + 20);
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            // 检测点是否在水果范围内（用于判断是否被切割）
+            containsPoint(x, y) {
+                const centerX = this.x + this.type.size / 2;  // 水果中心X
+                const centerY = this.y + this.type.size / 2;  // 水果中心Y
+                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                return distance < this.type.size / 2 + 20;  // 水果半径 + 20px容差
+            }
+        }
+
+        // 粒子类 - 切割水果时产生的爆炸特效
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;      // X坐标(水果中心)
+                this.y = y;      // Y坐标(水果中心)
+                this.vx = (Math.random() - 0.5) * 15;  // 水平速度(随机爆炸方向)
+                this.vy = (Math.random() - 0.5) * 15 - 5;  // 垂直速度(向上爆开)
+                this.color = color;  // 粒子颜色(跟随水果颜色)
+                this.life = 1;  // 生命周期(1=满, 0=消失)
+                this.decay = 0.02 + Math.random() * 0.02;  // 每帧衰减量(渐变消失速度)
+                this.size = 5 + Math.random() * 10;  // 粒子大小(随机)
+            }
+
+            // 更新粒子状态
+            update() {
+                this.x += this.vx;  // 水平移动
+                this.y += this.vy;  // 垂直移动
+                this.vy += 0.3;  // 模拟重力效果(下落加速)
+                this.life -= this.decay;  // 生命周期衰减
+            }
+
+            // 绘制粒子
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life);  // 透明度随生命周期变化
+                ctx.fillStyle = this.color;  // 粒子颜色
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, Math.max(0, this.size * this.life), 0, Math.PI * 2);  // 圆点大小随life缩小
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 绘制闪电效果的函数（切割水果时从手到水果的连线）
+        function drawLightningBolt(ctx, x1, y1, x2, y2, color) {
+            ctx.save();
+            ctx.strokeStyle = color;  // 闪电颜色
+            ctx.lineWidth = 3;  // 线条宽度
+            ctx.lineCap = 'round';  // 线条末端圆润
+            ctx.shadowColor = color;  // 发光效果颜色
+            ctx.shadowBlur = 30;  // 发光模糊度
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // 生成水果：根据间隔时间在玩家区域生成水果
+        function spawnFruitForPlayer(player) {
+            const now = Date.now();
+            if (now - player.lastSpawnTime > player.spawnInterval) {
+                const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+                const canvasWidth = canvas ? canvas.width : 300;
+                player.fruits.push(new Fruit(canvasWidth));
+                player.lastSpawnTime = now;
+
+                // 10%概率额外生成一个水果（受难度影响）
+                if (Math.random() < 0.1 * difficulty) {
+                    setTimeout(() => {
+                        if (player.gameRunning) player.fruits.push(new Fruit(canvasWidth));
+                    }, player.spawnInterval / 3);
+                }
+            }
+        }
+
+        // 切割水果：检测手势是否切割到水果，执行切割逻辑
+        function sliceFruitForPlayer(player, handX, handY) {
+            const gameX = handX;
+            const gameY = handY;
+
+            // 检测是否在切割区域内
+            if (gameY < SLICE_ZONE_TOP || gameY > SLICE_ZONE_BOTTOM) {
+                return false;
+            }
+
+            // 遍历所有水果，检测是否被切割
+            for (let i = player.fruits.length - 1; i >= 0; i--) {
+                const fruit = player.fruits[i];
+                if (!fruit.sliced && fruit.containsPoint(gameX, gameY)) {
+                    fruit.sliced = true;  // 标记为已切割
+
+                    const fruitCenterX = fruit.x + fruit.type.size / 2;
+                    const fruitCenterY = fruit.y + fruit.type.size / 2;
+
+                    // 绘制闪电效果
+                    const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+                    const ctx = canvas ? canvas.getContext('2d') : null;
+                    if (ctx) {
+                        drawLightningBolt(ctx, gameX, gameY, fruitCenterX, fruitCenterY, '#00ffff');
+                    }
+
+                    // 计算得分（双手举起时双倍）
+                    const points = currentTwoHandsUp ? fruit.type.points * 2 : fruit.type.points;
+                    player.score += points;
+                    player.combo++;  // 增加连击数
+
+                    // 更新分数显示
+                    updateFruitScoreDisplay(player.id);
+
+                    // 生成粒子特效（15个）
+                    for (let j = 0; j < 15; j++) {
+                        player.particles.push(new Particle(
+                            fruit.x + fruit.type.size / 2,
+                            fruit.y + fruit.type.size / 2,
+                            fruit.type.color
+                        ));
+                    }
+
+                    player.fruits.splice(i, 1);  // 从数组移除水果
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // 更新玩家分数显示
+        function updateFruitScoreDisplay(playerId) {
+            const player = players.find(p => p.id === playerId);
+            if (player) {
+                const scoreDisplay = document.getElementById(`score-display-${playerId}`);
+                if (scoreDisplay) {
+                    scoreDisplay.textContent = `积分: ${player.score}`;
+                }
+            }
+        }
+
+        // 检测漏切水果：将超出画布的水果移除
+        function checkMissedFruitForPlayer(player) {
+            const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+            if (!canvas) return;
+
+            const canvasHeight = canvas.height;
+            for (let i = player.fruits.length - 1; i >= 0; i--) {
+                if (player.fruits[i].y > canvasHeight) {  // 水果超出画布底部
+                    player.fruits.splice(i, 1);  // 移除水果
+                }
+            }
+        }
+
+ 
+        
+        // 初始化游戏
+        // 初始化游戏：创建玩家、初始化摄像头、启动游戏循环
+        function initGame() {
+            // 创建2个玩家
+            for (let i = 1; i <= 2; i++) {
+                players.push(createPlayer(i));
+            }
+
+            // 初始化游戏框架（使用 QuickGameStarter 通用组件）
+            initGameFramework();
+
+            // 启动游戏主循环
+            startGame();
+        }
+
+        // 使用 QuickGameStarter 快速启动
+        async function initGameFramework() {
+            console.log('=== initGameFramework 开始 ===');
+            try {
+                gameStarter = new QuickGameStarter({
+                    gameFrameworkOptions: {
+                        playerCount: 2,
+                        selfieMode: true,
+                        videoElementId: 'camera',
+                        poseCanvasId: 'pose-canvas',
+                        modelComplexity: 1,
+                        poseDetectInterval: 50, // 50毫秒 ,约 20fps
+                        poseInputScale: 0.5, // 姿态检测输入缩放比例，0.5 表示宽高减半
+                        minDetectionConfidence: 0.5,
+                        minTrackingConfidence: 0.5,
+                        useUpperBodyJumpDetection: true,
+                        actionCooldown: 300,
+                        detectionAreaTop: 0.3,
+                        detectionAreaBottom: 0.8,
+                        actionTypes: [ACTION_TYPE.RIGHT_HAND_RAISED, ACTION_TYPE.STANDING],
+                        avatarRadiusRatio: 0.1,
+                        playerDetectionConfigs: [
+                            { id: 1, detectionArea: { x1: 0.15, y1: 0.3, x2: 0.45, y2: 0.8 } },
+                            { id: 2, detectionArea: { x1: 0.55, y1: 0.3, x2: 0.85, y2: 0.8 } }
+                        ]
+                    },
+
+                    onInitialized: (data, framework) => {
+                        console.log('游戏初始化完成:', data);
+                    },
+
+                    onStarted: () => {
+                        console.log('游戏框架开始运行');
+                    },
+
+                    onPlayerAction: (playerId, action, landmarks, framework) => {
+                        handlePlayerAction(playerId, action, landmarks);
+                    },
+
+                    onPoseResults: (results, framework) => {
+                        results.forEach(result => {
+                            updatePlayerPose(result.playerId, result.landmarks);
+                            updateHandPositions(result.playerId, result.landmarks);
+                        });
+                    },
+
+                    onActionResults: (results, framework) => {
+                        results.forEach(result => {
+                            updateActionDisplay(result.playerId, result.action);
+                        });
+                    },
+
+                    onCameraReady: (framework) => {
+                        startGameTimer();
+                    },
+
+                    onError: (error) => {
+                        console.error('游戏框架错误:', error);
+                        document.getElementById('action-display').textContent =
+                            '摄像头访问失败: ' + error.message + '，使用模拟数据';
+                        startMockActionData();
+                    }
+                });
+
+                gameFramework = await gameStarter.start(gameLoop);
+                console.log('=== initGameFramework 完成 ===');
+
+            } catch (error) {
+                console.error('游戏框架启动失败:', error);
+                console.log('错误堆栈:', error.stack);
+                startMockActionData();
+            }
+        }
+
+        // 处理玩家动作
+        function isRankingInteractionLocked() {
+            const rankingContainer = document.getElementById('game-rankings');
+            if (!rankingContainer) return false;
+
+            const lockedUntil = Number(rankingContainer.dataset.lockedUntil || 0);
+            return Date.now() < lockedUntil;
+        }
+
+        function handlePlayerAction(playerId, action, landmarks) {
+            if (isRankingInteractionLocked()) {
+                return;
+            }
+
+            const player = players.find(p => p.id === playerId);
+            if (!player) return;
+
+            player.currentAction = action;
+
+            const actionDisplay = document.getElementById(`action-display-${playerId}`);
+            if (actionDisplay) {
+                actionDisplay.textContent = action;
+            }
+
+            updateHandPositions(playerId, landmarks);
+
+            if (action === ACTION_TYPE.RIGHT_HAND_RAISED && !player.gameRunning) {
+                const closeBtn = document.getElementById('close-ranking');
+                if (closeBtn) {
+                    stopRestartCountdown();
+                    closeBtn.click();
+                }
+                togglePlayerGame(playerId);
+            }
+
+            if (action === ACTION_TYPE.BOTH_HANDS_RAISED) {
+                currentTwoHandsUp = true;
+                lastTwoHandsTime = Date.now();
+            } else {
+                if (Date.now() - lastTwoHandsTime > 500) {
+                    currentTwoHandsUp = false;
+                }
+            }
+        }
+
+        // 更新玩家姿态数据
+        function updatePlayerPose(playerId, landmarks) {
+            const player = players.find(p => p.id === playerId);
+            if (player) {
+                player.currentPose = landmarks;
+            }
+        }
+
+        // 更新手部位置
+        function updateHandPositions(playerId, landmarks) {
+            const player = players.find(p => p.id === playerId);
+            if (!player || !landmarks) return;
+
+            const selfieMode = gameFramework.options.selfieMode;
+            const rightWrist = landmarks[16];
+            const leftWrist = landmarks[15];
+            const rightShoulder = landmarks[12];
+            const leftShoulder = landmarks[11];
+
+            const playerConfig = gameFramework.playerConfigs.find(c => c.id === playerId);
+            const detectionArea = playerConfig ? playerConfig.detectionArea : { x1: 0, y1: 0, x2: 1, y2: 1 };
+
+            const rightWristToUse = selfieMode ? leftWrist : rightWrist;
+            const leftWristToUse = selfieMode ? rightWrist : leftWrist;
+
+            if (rightWristToUse && rightShoulder) {
+                const gameArea = player.gameArea;
+                if (gameArea) {
+                    const gameRect = gameArea.getBoundingClientRect();
+                    const relativeX = (rightWristToUse.x - detectionArea.x1) / (detectionArea.x2 - detectionArea.x1);
+                    const relativeY = (rightWristToUse.y - detectionArea.y1) / (detectionArea.y2 - detectionArea.y1);
+
+                    player.currentRightHandPosition = {
+                        x: relativeX * gameRect.width,
+                        y: relativeY * gameRect.height
+                    };
+
+                    const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+                    const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+                    player.currentRightHandUp = rightShoulder.y - rightWristToUse.y > armRaisedThreshold;
+                }
+            } else {
+                player.currentRightHandPosition = null;
+                player.currentRightHandUp = false;
+            }
+
+            if (leftWristToUse && leftShoulder) {
+                const gameArea = player.gameArea;
+                if (gameArea) {
+                    const gameRect = gameArea.getBoundingClientRect();
+                    const relativeX = (leftWristToUse.x - detectionArea.x1) / (detectionArea.x2 - detectionArea.x1);
+                    const relativeY = (leftWristToUse.y - detectionArea.y1) / (detectionArea.y2 - detectionArea.y1);
+
+                    player.currentLeftHandPosition = {
+                        x: relativeX * gameRect.width,
+                        y: relativeY * gameRect.height
+                    };
+                }
+            } else {
+                player.currentLeftHandPosition = null;
+            }
+        }
+
+        // 更新动作显示
+        function updateActionDisplay(playerId, action) {
+            const actionDisplay = document.getElementById(`action-display-${playerId}`);
+            if (actionDisplay) {
+                actionDisplay.textContent = action;
+            }
+        }
+
+        // 捕获玩家头像
+        function capturePlayerAvatar(playerIndex) {
+            if (!gameStarter) return;
+            const avatarDataUrl = gameStarter.captureAvatar(playerIndex);
+            if (avatarDataUrl) {
+                const player = players.find(p => p.id === playerIndex);
+                if (player) {
+                    player.avatar = avatarDataUrl;
+                }
+            }
+        }
+
+        // 模拟动作数据（用于测试，无需摄像头）
+        function startMockActionData() {
+            isUsingMockData = true;
+            console.log('开始使用模拟动作数据');
+
+            const actions = ['站立' ];
+            let currentIndex = 0;
+            
+            setInterval(() => {
+                currentAction = actions[currentIndex];
+                currentIndex = (currentIndex + 1) % actions.length;
+                console.log('模拟动作:', currentAction);
+                
+                const actionDisplay = document.getElementById('action-display');
+                if (actionDisplay) {
+                    actionDisplay.textContent = currentAction;
+                }
+            }, 3000);
+        }
+        
+        
+
+        // 切换单个玩家的游戏状态
+        function togglePlayerGame(playerIndex) {
+            const player = players.find(p => p.id === playerIndex);
+            if (!player) return;
+            
+            // 获取玩家区域元素
+            const playerArea = document.querySelector(`.player-area:nth-child(${playerIndex})`);
+            
+            player.gameRunning = !player.gameRunning;
+            
+            if (player.gameRunning) {
+                // 开始该玩家的游戏
+                player.objects = [];
+                // 清零积分
+                player.score = 0;
+                // 更新积分显示
+                const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+                if (scoreDisplay) {
+                    scoreDisplay.textContent = `积分: ${player.score}`;
+                }
+                
+
+                // 添加game-running类
+                if (playerArea) {
+                    playerArea.classList.add('game-running');
+                }
+                
+                // 拍摄玩家头像
+                capturePlayerAvatar(playerIndex);
+            } else {
+                // 停止该玩家的游戏
+                player.objects.forEach(obj => {
+                    if (obj.element && obj.element.parentNode) {
+                        player.gameArea.removeChild(obj.element);
+                    }
+                });
+                player.objects = [];
+                
+                // 移除game-running类
+                if (playerArea) {
+                    playerArea.classList.remove('game-running');
+                }
+            }
+        }
+        
+        // 开始游戏：清空物体、启动游戏循环和物体生成
+        function startGame() {
+
+            gameLoop();
+
+        }
+
+        // 停止游戏：停止计时器、清空所有玩家物体、显示排名
+        function stopGame() {
+            // 停止游戏倒计时
+            stopGameTimer();
+
+            // 显示游戏结束排名
+            showGameRankings();
+        }
+        
+        // 显示游戏排名浮窗（显示前三名玩家）
+        let gameRanking = null;
+        function showGameRankings() {
+            gameRanking = new GameRanking();
+            gameRanking.showRankings(players, {
+                topCount: 3,
+                title: '游戏排名',
+                restartCountdown: 6,
+                minDisplayTime: 2000,
+                onRestart: () => {
+                    restartGameFromRanking();
+                },
+                returnUrl: '/smartgames.html'
+            });
+        }
+
+        // 启动重新开始倒计时：5秒后自动返回游戏列表
+        function startRestartCountdown() {
+            const countdownElement = document.getElementById('restart-countdown');
+            if (!countdownElement) return;
+
+            restartTimeLeft = RESTART_COUNTDOWN;
+            countdownElement.textContent = restartTimeLeft;
+
+            restartTimer = setInterval(() => {
+                restartTimeLeft--;
+                countdownElement.textContent = restartTimeLeft;
+
+                if (restartTimeLeft <= 0) {
+                    stopRestartCountdown();
+                    window.location.href = '/smartgames.html';
+                }
+            }, 1000);
+        }
+
+        // 重新开始游戏（从排名浮窗触发）
+        function restartGameFromRanking() {
+            console.log('[DEBUG] restartGameFromRanking called');
+            stopRestartCountdown();
+
+            // 移除排名浮窗
+            const rankingContainer = document.getElementById('game-rankings');
+            const closeBtn = rankingContainer ? rankingContainer.querySelector('#close-ranking') : null;
+            if (rankingContainer) {
+                document.body.removeChild(rankingContainer);
+                if (closeBtn) {
+                    closeBtn.click();
+                }
+            }
+
+
+
+            // 重置所有玩家状态
+            players.forEach(player => {
+                player.score = 0;
+                player.combo = 0;
+                player.fruits = [];
+                player.objects = [];
+                player.gameRunning = false;
+                player.lastSpawnTime = Date.now();
+                player.currentRightHandUp = false;
+
+                const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+                if (scoreDisplay) {
+                    scoreDisplay.textContent = `积分: 0`;
+                }
+
+                const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+
+                const actionDisplay = document.getElementById(`action-display-${player.id}`);
+                if (actionDisplay) {
+                    actionDisplay.style.display = 'none';
+                }
+
+                const playerArea = document.querySelector(`.player-area:nth-child(${player.id})`);
+                if (playerArea) {
+                    playerArea.classList.remove('game-running');
+                }
+            });
+
+            // 启动游戏倒计时，游戏会在倒计时结束后展示排名浮窗
+            gameRunning = true;
+            startGameTimer();
+        }
+
+        // 停止重新开始倒计时
+        function stopRestartCountdown() {
+            if (restartTimer) {
+                clearInterval(restartTimer);
+                restartTimer = null;
+            }
+        }
+
+        // 检测是否有任何玩家举起右手（用于触发重新开始）
+        function checkAnyPlayerRightHandUp() {
+            for (let i = 0; i < players.length; i++) {
+                if (players[i].currentRightHandUp) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+
+
+        // 启动游戏倒计时（60秒）
+        function startGameTimer() {
+            const timerElement = document.getElementById('game-timer');
+            const timerValue = document.getElementById('timer-value');
+
+            if (timerElement) {
+                timerElement.style.display = 'flex';
+            }
+
+            gameTimeLeft = GAME_DURATION;
+            timerValue.textContent = gameTimeLeft;
+
+            gameTimer = setInterval(() => {
+                gameTimeLeft--;
+                timerValue.textContent = gameTimeLeft;
+
+                // 当时间少于等于10秒时，更醒目的颜色
+                if (gameTimeLeft <= 10) {
+                    timerValue.style.color = '#ff4444';
+                    timerValue.style.textShadow = '2px 2px 4px rgba(255, 0, 0, 0.5)';
+                }
+
+                // 在倒计时过程中检查是否有玩家开始游戏
+                const anyPlayerStarted = players.some(p => p.gameRunning);
+                if (!anyPlayerStarted && (GAME_DURATION - gameTimeLeft) >= 8) {
+                    // 8秒内没有玩家开始游戏，返回列表页
+                    stopGameTimer();
+                    window.location.href = '/smartgames.html';
+                    return;
+                }
+
+                if (gameTimeLeft <= 0) {
+                    endGameByTimer();
+                }
+            }, 1000);
+        }
+
+        // 停止游戏倒计时
+        function stopGameTimer() {
+            if (gameTimer) {
+                clearInterval(gameTimer);
+                gameTimer = null;
+            }
+
+            const timerElement = document.getElementById('game-timer');
+            if (timerElement) {
+                timerElement.style.display = 'none';
+            }
+        }
+
+        // 倒计时结束，结束游戏并显示排名
+        function endGameByTimer() {
+            stopGameTimer();
+
+            // 停止所有玩家的游戏
+            players.forEach(player => {
+                player.gameRunning = false;
+                // 停止水果生成
+                if (player.fruits) {
+                    player.fruits = [];
+                }
+            });
+
+            // 显示游戏排名
+            showGameRankings();
+        }
+
+        // 游戏主循环：每帧执行（约60fps），负责水果的生成、更新、绘制和切割检测
+        function gameLoop() {
+            // 遍历每个玩家
+            players.forEach(player => {
+                // 获取该玩家的canvas元素
+                const canvas = document.getElementById(`fruit-canvas-${player.id}`);
+                if (!canvas) return;
+
+                // 设置canvas尺寸为玩家区域大小
+                canvas.width = player.gameArea.offsetWidth;
+                canvas.height = player.gameArea.offsetHeight;
+                const ctx = canvas.getContext('2d');
+
+                // 1. 清空画布
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                if (player.gameRunning) {  // 只处理正在运行的游戏
+                    // 2. 绘制深蓝色背景
+                    ctx.fillStyle = "#0a0a1a";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // 3. 生成水果（根据间隔时间生成新水果）
+                    spawnFruitForPlayer(player);
+
+                    // 4. 更新并绘制所有水果
+                    for (let i = player.fruits.length - 1; i >= 0; i--) {
+                        player.fruits[i].update();   // 更新水果位置（下落、旋转）
+                        player.fruits[i].draw(ctx);  // 绘制水果到canvas
+                    }
+
+                    // 5. 更新并绘制粒子特效
+                    for (let i = player.particles.length - 1; i >= 0; i--) {
+                        player.particles[i].update();  // 更新粒子位置和生命周期
+                        player.particles[i].draw(ctx); // 绘制粒子
+                        if (player.particles[i].life <= 0) {  // 粒子死亡后移除
+                            player.particles.splice(i, 1);
+                        }
+                    }
+
+                    // 7. 检查是否有水果漏切（超出画布底部）
+                    checkMissedFruitForPlayer(player);
+
+                    // 8. 检测手势是否切到水果（核心切割逻辑）
+                    checkHandSliceForPlayer(player);
+
+                    // 9. 绘制手的挥刀轨迹线
+                    drawBladeTrail(player, ctx);
+                } else {
+                    // 游戏未开始，显示对应检测区域的视频画面
+                    drawPlayerDetectionAreaVideo(player, ctx);
+                }
+            });
+
+            // 循环调用自身，形成持续的游戏循环
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 绘制玩家检测区域对应的视频画面
+        function drawPlayerDetectionAreaVideo(player, ctx) {
+            const video = document.getElementById('camera');
+            if (!video || !video.videoWidth || !video.videoHeight) {
+                // 如果视频未就绪，显示等待提示
+                ctx.fillStyle = "#1a1a2e";
+                ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "14px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("等待摄像头...", ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
+
+            // 获取玩家的检测区域配置
+            const playerConfig = gameFramework ? gameFramework.playerConfigs.find(c => c.id === player.id) : null;
+            let detectionArea = playerConfig ? playerConfig.detectionArea : { x1: 0, y1: 0, x2: 1, y2: 1 };
+
+            // 计算视频源区域（考虑自拍模式的镜像）
+            const selfieMode = gameFramework ? gameFramework.options.selfieMode : true;
+            
+            // 如果是自拍模式，需要镜像玩家检测区域（因为视频是左右镜像的）
+            // 原来的顺序 1,2,3,4 变成 4,3,2,1
+            let finalDetectionArea = detectionArea;
+            if (selfieMode) {
+                // 镜像x坐标：x1' = 1 - x2, x2' = 1 - x1
+                finalDetectionArea = {
+                    x1: 1 - detectionArea.x2,
+                    y1: detectionArea.y1,
+                    x2: 1 - detectionArea.x1,
+                    y2: detectionArea.y2
+                };
+            }
+
+            let sourceX = finalDetectionArea.x1 * video.videoWidth;
+            let sourceY = finalDetectionArea.y1 * video.videoHeight;
+            let sourceWidth = (finalDetectionArea.x2 - finalDetectionArea.x1) * video.videoWidth;
+            let sourceHeight = (finalDetectionArea.y2 - finalDetectionArea.y1) * video.videoHeight;
+
+            // 如果是自拍模式，镜像视频
+            ctx.save();
+            if (selfieMode) {
+                ctx.translate(ctx.canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+
+            // 绘制视频区域
+            try {
+                ctx.drawImage(
+                    video,
+                    sourceX, sourceY, sourceWidth, sourceHeight,
+                    0, 0, ctx.canvas.width, ctx.canvas.height
+                );
+            } catch (e) {
+                console.log('视频绘制暂不可用');
+            }
+
+            ctx.restore();
+
+            // 绘制边框提示
+            ctx.strokeStyle = "#00ff00";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(5, 5, ctx.canvas.width - 10, ctx.canvas.height - 10);
+
+            // 绘制玩家提示文字
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(10, 10, ctx.canvas.width - 20, 30);
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(`玩家${player.id} - 举起右手开始`, ctx.canvas.width / 2, 30);
+        }
+
+        // 检测手势切割：判断手的移动速度是否足够快来切割水果
+        function checkHandSliceForPlayer(player) {
+            // if (!player.gameRunning) return;
+
+            const now = Date.now();
+
+            // 处理右手
+            if (player.currentRightHandPosition) {
+                const handX = player.currentRightHandPosition.x;
+                const handY = player.currentRightHandPosition.y;
+
+                if (player.lastRightHandPosition) {
+                    const dx = handX - player.lastRightHandPosition.x;
+                    const dy = handY - player.lastRightHandPosition.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    // 移动超过10px则记录轨迹点
+                    if (distance > 10) {
+                        player.rightBladeTrail.push(new BladePoint(handX, handY));
+                    }
+
+                    // 计算移动速度
+                    const dt = now - player.lastRightHandTime;
+                    if (dt > 0) {
+                        const speed = distance / dt * 1000;  // 速度：像素/秒
+                        if (speed > 50 && player.gameRunning) {  // 速度超过50px/s视为有效切割，且游戏必须运行
+                            sliceFruitForPlayer(player, handX, handY);
+                        }
+                    }
+                } else {
+                    player.rightBladeTrail.push(new BladePoint(handX, handY));
+                }
+
+                player.lastRightHandPosition = { x: handX, y: handY };
+                player.lastRightHandTime = now;
+            } else {
+                player.lastRightHandPosition = null;
+            }
+
+            // 处理左手（逻辑同上）
+            if (player.currentLeftHandPosition) {
+                const handX = player.currentLeftHandPosition.x;
+                const handY = player.currentLeftHandPosition.y;
+
+                if (player.lastLeftHandPosition) {
+                    const dx = handX - player.lastLeftHandPosition.x;
+                    const dy = handY - player.lastLeftHandPosition.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance > 10) {
+                        player.leftBladeTrail.push(new BladePoint(handX, handY));
+                    }
+
+                    const dt = now - player.lastLeftHandTime;
+                    if (dt > 0) {
+                        const speed = distance / dt * 1000;
+                        if (speed > 50 && player.gameRunning) {
+                            sliceFruitForPlayer(player, handX, handY);
+                        }
+                    }
+                } else {
+                    player.leftBladeTrail.push(new BladePoint(handX, handY));
+                }
+
+                player.lastLeftHandPosition = { x: handX, y: handY };
+                player.lastLeftHandTime = now;
+            } else {
+                player.lastLeftHandPosition = null;
+            }
+        }
+       
+
+        // 更新玩家积分：加分或减分，更新显示
+        function updatePlayerScore(player, points) {
+            // 更新积分
+            player.score += points;
+            // 确保积分不会小于0
+            if (player.score < 0) {
+                player.score = 0;
+            }
+            
+            // 更新积分显示
+            const scoreDisplay = document.getElementById(`score-display-${player.id}`);
+            if (scoreDisplay) {
+                scoreDisplay.textContent = `积分: ${player.score}`;
+                // 添加积分变动动画
+                scoreDisplay.classList.add('score-change');
+                setTimeout(() => {
+                    scoreDisplay.classList.remove('score-change');
+                }, 500);
+            }
+        }
+        
+        // 显示弹幕：在角色上方显示飘过的心情文字
+        function showMessage(player, message) {
+            const characterRect = player.character.getBoundingClientRect();
+            const gameAreaRect = player.gameArea.getBoundingClientRect();
+            
+            const messageElement = document.createElement('div');
+            messageElement.className = '弹幕';
+            messageElement.textContent = message;
+            messageElement.style.left = `${characterRect.left - gameAreaRect.left + characterRect.width / 2}px`;
+            messageElement.style.top = `${characterRect.top - gameAreaRect.top - 50}px`;
+            messageElement.style.transform = 'translateX(-50%)';
+            
+            player.gameArea.appendChild(messageElement);
+            
+            setTimeout(() => {
+                if (messageElement.parentNode) {
+                    messageElement.parentNode.removeChild(messageElement);
+                }
+            }, 2000);
+        }
+
+        // 绘制挥刀轨迹：绘制玩家右手和左手的切割轨迹线
+        function drawBladeTrail(player, ctx) {
+            const now = Date.now();
+            
+            // 过滤右手轨迹
+            if (player.rightBladeTrail) {
+                player.rightBladeTrail = player.rightBladeTrail.filter(p => now - p.time < 200);
+            }
+            // 过滤左手轨迹
+            if (player.leftBladeTrail) {
+                player.leftBladeTrail = player.leftBladeTrail.filter(p => now - p.time < 200);
+            }
+            
+            const rightColor = '#ffff00'; // 右手黄色
+            const leftColor = '#00ffff';  // 左手青色
+            
+            // 绘制右手轨迹
+            if (player.rightBladeTrail && player.rightBladeTrail.length >= 2) {
+                for (let i = 0; i < player.rightBladeTrail.length - 1; i++) {
+                    const p1 = player.rightBladeTrail[i];
+                    const p2 = player.rightBladeTrail[i + 1];
+                    drawLightningBolt(ctx, p1.x, p1.y, p2.x, p2.y, rightColor);
+                }
+                
+                const first = player.rightBladeTrail[0];
+                const last = player.rightBladeTrail[player.rightBladeTrail.length - 1];
+                drawLightningBolt(ctx, first.x, first.y, last.x, last.y, rightColor);
+            }
+            
+            // 绘制左手轨迹
+            if (player.leftBladeTrail && player.leftBladeTrail.length >= 2) {
+                for (let i = 0; i < player.leftBladeTrail.length - 1; i++) {
+                    const p1 = player.leftBladeTrail[i];
+                    const p2 = player.leftBladeTrail[i + 1];
+                    drawLightningBolt(ctx, p1.x, p1.y, p2.x, p2.y, leftColor);
+                }
+                
+                const first = player.leftBladeTrail[0];
+                const last = player.leftBladeTrail[player.leftBladeTrail.length - 1];
+                drawLightningBolt(ctx, first.x, first.y, last.x, last.y, leftColor);
+            }
+        }
+
+        // 绘制闪电效果：水果被切割时绘制手到水果的闪电连线
+        function drawLightningBolt(ctx, x1, y1, x2, y2, color) {
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 30;
+
+            const distance = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+            const segments = Math.max(4, Math.min(8, Math.floor(distance / 20)));
+            const maxOffset = Math.min(10, distance * 0.1);
+
+            const dx = (x2 - x1) / segments;
+            const dy = (y2 - y1) / segments;
+            
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            
+            for (let i = 1; i < segments; i++) {
+                const offsetX = (Math.random() - 0.5) * maxOffset;
+                const offsetY = (Math.random() - 0.5) * maxOffset;
+                ctx.lineTo(x1 + dx * i + offsetX, y1 + dy * i + offsetY);
+            }
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+            
+            ctx.shadowBlur = 50;
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#ffffff';
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+
+        // 初始化游戏
+        initGame();
+    </script>
+</body>
+</html>

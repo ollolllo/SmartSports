@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧体育 - 游戏列表</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="mediapipe/control_utils/control_utils.js"></script>
+    <script src="mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="mediapipe/pose.js"></script>
+    <script src="/common/mediapipe_action_manager.js"></script>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 40px 20px;
+            overflow: hidden;
+        }
+        .game-list {
+            max-width: 1200px;
+            margin: 0 auto;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .game-list h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 32px;
+            text-shadow: 0 0 20px rgba(255,255,255,0.5);
+            letter-spacing: 4px;
+        }
+        .carousel-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .carousel-track {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            height: 100%;
+        }
+        .game-card {
+            position: absolute;
+            width: 300px;
+            height: 520px;
+            background: linear-gradient(145deg, #ffffff 0%, #f0f0f0 100%);
+            border-radius: 20px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            text-decoration: none;
+            color: inherit;
+        }
+        .game-card:hover {
+            transform: scale(1.05);
+        }
+        .game-card-image {
+            width: 300px;
+            height: 400px;
+            object-fit: contain;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+        }
+        .game-card-content {
+            padding: 20px;
+            text-align: center;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .game-card-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .game-card-desc {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .game-card.center {
+            z-index: 100;
+            transform: scale(1.1);
+            box-shadow: 0 30px 60px rgba(102, 126, 234, 0.4),
+                        0 0 40px rgba(102, 126, 234, 0.3),
+                        inset 0 0 20px rgba(255,255,255,0.1);
+        }
+        .game-card.left-1 {
+            z-index: 80;
+            transform: translateX(-200px) scale(0.85);
+            opacity: 0.7;
+            box-shadow: -15px 20px 40px rgba(0,0,0,0.4);
+        }
+        .game-card.left-2 {
+            z-index: 60;
+            transform: translateX(-380px) scale(0.7);
+            opacity: 0.4;
+        }
+        .game-card.right-1 {
+            z-index: 80;
+            transform: translateX(200px) scale(0.85);
+            opacity: 0.7;
+            box-shadow: 15px 20px 40px rgba(0,0,0,0.4);
+        }
+        .game-card.right-2 {
+            z-index: 60;
+            transform: translateX(380px) scale(0.7);
+            opacity: 0.4;
+        }
+        .game-card.hidden {
+            z-index: 0;
+            opacity: 0;
+            pointer-events: none;
+        }
+        .carousel-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 200;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        .carousel-btn:hover {
+            background: rgba(255,255,255,0.4);
+            transform: translateY(-50%) scale(1.1);
+        }
+        .carousel-btn.left { left: 50px; }
+        .carousel-btn.right { right: 50px; }
+        .carousel-indicators {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .indicator.active {
+            background: white;
+            transform: scale(1.3);
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        #camera {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            height: 200px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            z-index: 1000;
+            object-fit: cover;
+            transform: scaleX(-1);
+
+        }
+        #pose-canvas {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            height: 200px;
+            border: 2px solid #FF5722;
+            border-radius: 10px;
+            z-index: 1001;
+            pointer-events: none;
+            transform: scaleX(-1);
+        }
+        #action-display {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 18px;
+            z-index: 1000;
+        }
+        .start-hint {
+            position: fixed;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(102, 126, 234, 0.8);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 20px;
+            z-index: 1000;
+            animation: pulse 2s infinite;
+            display: none; /* 默认隐藏 */
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: translateX(-50%) scale(1); }
+            50% { opacity: 0.8; transform: translateX(-50%) scale(1.05); }
+        }
+    </style>
+</head>
+<body>
+    <div style="display: none;">
+ 
+    <video id="camera" autoplay playsinline></video>
+    <canvas id="pose-canvas"></canvas>
+    </div>
+
+    <div class="game-list">
+        <h1>🎮 游戏选择</h1>
+        <div class="carousel-container">
+            <button class="carousel-btn left" id="prevBtn">‹</button>
+            <div class="carousel-track" id="carousel-track"></div>
+            <button class="carousel-btn right" id="nextBtn">›</button>
+        </div>
+        <div class="carousel-indicators" id="carousel-indicators"></div>
+    </div>
+
+    <div id="action-display">举起右手选择游戏</div>
+    <div class="start-hint" id="start-hint">举起右手打开游戏</div>
+
+    <script>
+        // 游戏列表配置 - 在这里添加新游戏
+        const games = [
+            {
+                name: '水果忍者2人',
+                // link: '/fruit2player.html',
+                link: '/fruit2playercommon.html',
+                image: '/imgs/fruit4.jpg',
+                desc: '切水果竞技游戏'
+            },
+            {
+                name: '水果忍者3人',
+                // link: '/fruit3player.html',
+                link: '/fruit3playercommon.html',
+                image: '/imgs/fruit4.jpg',
+                desc: '切水果竞技游戏'
+            },
+            {
+                name: '水果忍者4人',
+                // link: '/fruit4player.html',
+                link: '/fruit4playercommon.html',
+                image: '/imgs/fruit4.jpg',
+                desc: '切水果竞技游戏'
+            },
+            {
+                name: '夺宝奇兵2人',
+                link: '/duobao2.html',
+                image: '/imgs/duobao4.jpeg',
+                desc: '多人夺宝游戏'
+            },
+            {
+                name: '夺宝奇兵3人',
+                link: '/duobao3.html',
+                image: '/imgs/duobao4.jpeg',
+                desc: '多人夺宝游戏'
+            },
+            {
+                name: '夺宝奇兵4人',
+                link: '/duobao4ren.html',
+                image: '/imgs/duobao4.jpeg',
+                desc: '多人夺宝游戏'
+            },
+
+
+            // {
+            //     name: '俄罗斯方块4人',
+            //     link: '/tetris4player.html',
+            //     image: '/imgs/tetris.jpeg',
+            //     desc: '方框拼接益智游戏'
+            // },
+            // {
+            //     name: '俄罗斯方块3人',
+            //     link: '/tetris3player.html',
+            //     image: '/imgs/tetris.jpeg',
+            //     desc: '方框拼接益智游戏'
+            // },
+            {
+                name: '星途2人',
+                link: '/xingtu2.html',
+                image: '/imgs/xingtu.jpeg',
+                desc: '专注力及反应训练'
+            },
+            {
+                name: '星途3人',
+                link: '/xingtu3.html',
+                image: '/imgs/xingtu.jpeg',
+                desc: '专注力及反应训练'
+            },
+            {
+                name: '星途4人',
+                link: '/xingtu4.html',
+                image: '/imgs/xingtu.jpeg',
+                desc: '专注力及反应训练'
+            }
+        ];
+
+        let currentIndex = 0;
+        let autoPlayInterval = null;
+        const RIGHT_HAND_UP_THRESHOLD = 200;
+        let rightHandUpState = {
+            1: { isUp: false, startTime: 0 },
+            2: { isUp: false, startTime: 0 },
+            3: { isUp: false, startTime: 0 },
+            4: { isUp: false, startTime: 0 }
+        };
+
+        // 轮播功能
+        function renderCarousel() {
+            const track = document.getElementById('carousel-track');
+            const indicatorsContainer = document.getElementById('carousel-indicators');
+            track.innerHTML = '';
+            indicatorsContainer.innerHTML = '';
+
+            games.forEach((game, index) => {
+                const card = document.createElement('a');
+                card.href = game.link;
+                card.className = 'game-card';
+                card.dataset.index = index;
+                card.innerHTML = `
+                    <img src="${game.image}" alt="${game.name}" class="game-card-image">
+                    <div class="game-card-content">
+                        <h3 class="game-card-title">${game.name}</h3>
+                        <p class="game-card-desc">${game.desc || ''}</p>
+                    </div>
+                `;
+                track.appendChild(card);
+
+                const indicator = document.createElement('div');
+                indicator.className = 'indicator' + (index === currentIndex ? ' active' : '');
+                indicator.addEventListener('click', () => goToSlide(index));
+                indicatorsContainer.appendChild(indicator);
+            });
+
+            updateCarousel();
+        }
+
+        function updateCarousel() {
+            const cards = document.querySelectorAll('.game-card');
+            const indicators = document.querySelectorAll('.indicator');
+
+            cards.forEach((card, index) => {
+                card.classList.remove('center', 'left-1', 'left-2', 'right-1', 'right-2', 'hidden');
+
+                let diff = index - currentIndex;
+                const total = games.length;
+
+                if (diff > total / 2) diff -= total;
+                if (diff < -total / 2) diff += total;
+
+                if (diff === 0) card.classList.add('center');
+                else if (diff === -1) card.classList.add('left-1');
+                else if (diff === -2) card.classList.add('left-2');
+                else if (diff === 1) card.classList.add('right-1');
+                else if (diff === 2) card.classList.add('right-2');
+                else card.classList.add('hidden');
+            });
+
+            indicators.forEach((ind, index) => {
+                ind.classList.toggle('active', index === currentIndex);
+            });
+        }
+
+        function goToSlide(index) {
+            currentIndex = index;
+            updateCarousel();
+            resetAutoPlay();
+        }
+
+        function prevSlide() {
+            currentIndex = (currentIndex - 1 + games.length) % games.length;
+            updateCarousel();
+            resetAutoPlay();
+        }
+
+        function nextSlide() {
+            currentIndex = (currentIndex + 1) % games.length;
+            updateCarousel();
+            resetAutoPlay();
+        }
+
+        function startAutoPlay() {
+            if (autoPlayInterval) clearInterval(autoPlayInterval);
+            autoPlayInterval = setInterval(nextSlide, 3000);
+        }
+
+        function resetAutoPlay() {
+            startAutoPlay();
+        }
+
+        document.getElementById('prevBtn').addEventListener('click', prevSlide);
+        document.getElementById('nextBtn').addEventListener('click', nextSlide);
+
+        renderCarousel();
+        startAutoPlay();
+
+        // 姿态检测功能
+        class ActionCapture {
+            constructor() {
+                this.videoElement = document.getElementById('camera');
+                this.poseCanvas = document.getElementById('pose-canvas');
+                this.actionDisplay = document.getElementById('action-display');
+                this.selfieMode = true;
+                this.pose = null;
+                this.isCameraStarted = false;
+                this.gameOpened = false;
+                this.playerPoses = { 1: null, 2: null, 3: null, 4: null };
+                this.poseHistory = { 1: [], 2: [], 3: [], 4: [] };
+                this.maxPoseHistory = 3;
+                this.actionHistory = { 1: [], 2: [], 3: [], 4: [] };
+                this.maxActionHistory = 3;
+                this.detectionSide = 0;
+                this.lastDetectionTime = 0;
+                this.detectionInterval = 15;
+                this.actionRecognizer = new ActionRecognizer();
+                this.actionRecognizer.options = {
+                    useUpperBodyJumpDetection: true,
+                    jumpUpperThreshold: 0.4,
+                    jumpLowerThreshold: 0.3
+                };
+                this.init();
+            }
+
+            init() {
+                this.setupCamera();
+            }
+
+            async setupCamera() {
+                if (this.isCameraStarted) return;
+
+                try {
+                    this.actionDisplay.style.display = 'block';
+                    this.actionDisplay.textContent = '正在设置摄像头...';
+
+                    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                        throw new Error('浏览器不支持摄像头访问');
+                    }
+
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: { ideal: 640 }, height: { ideal: 480 } },
+                        audio: false
+                    });
+
+                    this.videoElement.srcObject = stream;
+                    this.videoElement.onloadedmetadata = async () => {
+                        await this.videoElement.play();
+                        this.actionDisplay.textContent = '摄像头已启动';
+                        this.initPose();
+                        
+                        // 展示开始提示
+                        const startHint = document.getElementById('start-hint');
+                        if (startHint) {
+                            startHint.style.display = 'block';
+                        }
+                    };
+                } catch (error) {
+                    console.error('摄像头设置失败:', error);
+                    this.actionDisplay.textContent = '摄像头访问失败: ' + error.message;
+                }
+            }
+
+            async initPose() {
+                try {
+                    this.pose = new Pose({
+                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+                    });
+
+                    this.pose.setOptions({
+                        modelComplexity: 1,
+                        smoothLandmarks: true,
+                        enableSegmentation: false,
+                        smoothSegmentation: false,
+                        minDetectionConfidence: 0.5,
+                        minTrackingConfidence: 0.5,
+                        selfieMode: true
+                    });
+
+                    this.pose.onResults((results) => this.onPoseResults(results));
+
+                    await this.pose.initialize();
+                    this.isCameraStarted = true;
+                    // this.actionDisplay.textContent = '举起右手打开游戏';
+                    this.actionDisplay.style.display = "none";
+                    this.detectPose();
+                } catch (error) {
+                    console.error('Pose初始化失败:', error);
+                    this.actionDisplay.textContent = '姿态检测初始化失败';
+                }
+            }
+
+            onPoseResults(results) {
+                this.drawPoseResults(results);
+
+                if (!results.poseLandmarks) return;
+
+                const noseX = results.poseLandmarks[0].x;
+                let playerIndex;
+                if (noseX < 1/4) playerIndex = 1;
+                else if (noseX < 2/4) playerIndex = 2;
+                else if (noseX < 3/4) playerIndex = 3;
+                else playerIndex = 4;
+
+                this.poseHistory[playerIndex].push(results.poseLandmarks);
+                if (this.poseHistory[playerIndex].length > this.maxPoseHistory) {
+                    this.poseHistory[playerIndex].shift();
+                }
+
+                const smoothedPose = this.smoothPose(this.poseHistory[playerIndex]);
+                if (smoothedPose) {
+                    this.playerPoses[playerIndex] = smoothedPose;
+                    this.checkRightHandUp(playerIndex, smoothedPose);
+                }
+            }
+
+            smoothPose(poseHistory) {
+                if (!poseHistory || poseHistory.length === 0) return null;
+                if (poseHistory.length === 1) return poseHistory[0];
+
+                const smoothedPose = [];
+                const landmarkCount = poseHistory[0].length;
+                const weights = poseHistory.map((_, i) => i + 1);
+                let totalWeight = 0;
+                weights.forEach(w => totalWeight += w);
+
+                for (let i = 0; i < landmarkCount; i++) {
+                    let weightedSumX = 0, weightedSumY = 0, weightedSumZ = 0, totalW = 0;
+                    for (let j = 0; j < poseHistory.length; j++) {
+                        if (poseHistory[j][i]) {
+                            const w = weights[j];
+                            weightedSumX += poseHistory[j][i].x * w;
+                            weightedSumY += poseHistory[j][i].y * w;
+                            weightedSumZ += (poseHistory[j][i].z || 0) * w;
+                            totalW += w;
+                        }
+                    }
+                    if (totalW > 0) {
+                        smoothedPose[i] = {
+                            x: weightedSumX / totalW,
+                            y: weightedSumY / totalW,
+                            z: weightedSumZ / totalW
+                        };
+                    } else {
+                        smoothedPose[i] = null;
+                    }
+                }
+                return smoothedPose;
+            }
+
+            checkRightHandUp(playerIndex, landmarks) {
+                const requiredLandmarks = [0, 11, 12, 15, 16];
+                const hasRequiredLandmarks = requiredLandmarks.every(idx => landmarks[idx]);
+
+                if (!hasRequiredLandmarks) return;
+
+                const shoulderWidth = Math.abs(landmarks[11].x - landmarks[12].x);
+                const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+
+                const action = this.recognizeActionForPlayer(landmarks);
+                const isRightHandUp = (action === ACTION_TYPE.RIGHT_HAND_RAISED);
+                const state = rightHandUpState[playerIndex];
+
+                if (isRightHandUp) {
+                    if (!state.isUp) {
+                        state.isUp = true;
+                        state.startTime = Date.now();
+                    } else if (Date.now() - state.startTime > RIGHT_HAND_UP_THRESHOLD) {
+                        console.log('右手举起超过阈值，打开游戏');
+                        this.openSelectedGame();
+                    }
+                } else {
+                    state.isUp = false;
+                }
+            }
+
+            recognizeActionForPlayer(landmarks) {
+                const requiredLandmarks = [0, 11, 12, 15, 16, 23, 24];
+                const hasRequiredLandmarks = requiredLandmarks.every(idx => landmarks[idx]);
+
+                if (!hasRequiredLandmarks) {
+                    return "未检测到完整姿态";
+                }
+
+                const shoulderWidth = Math.abs(landmarks[11].x - landmarks[12].x);
+                const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+
+                if (this.actionRecognizer.detectHandsOpen(landmarks, shoulderWidth, this.selfieMode)) {
+                    return ACTION_TYPE.HANDS_OPEN;
+                }
+                else if (this.actionRecognizer.detectBothHandsRaised(landmarks, armRaisedThreshold, this.selfieMode)) {
+                    return ACTION_TYPE.BOTH_HANDS_RAISED;
+                }
+                else if (this.actionRecognizer.detectRightHandRaised(landmarks, armRaisedThreshold, this.selfieMode)) {
+                    return ACTION_TYPE.RIGHT_HAND_RAISED;
+                }
+                else if (this.actionRecognizer.detectLeftHandRaised(landmarks, armRaisedThreshold, this.selfieMode)) {
+                    return ACTION_TYPE.LEFT_HAND_RAISED;
+                }
+                else if (this.actionRecognizer.detectJumping(landmarks, this.selfieMode)) {
+                    return ACTION_TYPE.JUMPING;
+                }
+                else {
+                    return ACTION_TYPE.STANDING;
+                }
+            }
+
+            //  checkRightHandUp(playerIndex, landmarks) {
+            //     const rightShoulder = landmarks[12];
+            //     const rightWrist = landmarks[16];
+            //     const leftShoulder = landmarks[11];
+
+            //     if (!rightShoulder || !rightWrist || !leftShoulder) return;
+
+            //     const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+            //     const armRaisedThreshold = Math.max(0.1, shoulderWidth * 0.3);
+            //     const isRightHandUp = rightWrist.y < rightShoulder.y - armRaisedThreshold;
+            //     const state = rightHandUpState[playerIndex];
+
+            //     if (isRightHandUp) {
+            //         if (!state.isUp) {
+            //             state.isUp = true;
+            //             state.startTime = Date.now();
+            //         } else if (Date.now() - state.startTime > RIGHT_HAND_UP_THRESHOLD) {
+            //             this.openSelectedGame();
+            //         }
+            //     } else {
+            //         state.isUp = false;
+            //     }
+            // }
+
+            openSelectedGame() {
+                if (this.gameOpened) return;
+                this.gameOpened = true;
+                const selectedGame = games[currentIndex];
+                if (selectedGame) {
+                    window.location.href = selectedGame.link;
+                }
+            }
+
+            drawPoseResults(results) {
+                const canvas = this.poseCanvas;
+                if (!canvas || !this.videoElement) return;
+
+                canvas.width = this.videoElement.videoWidth || 640;
+                canvas.height = this.videoElement.videoHeight || 480;
+                const ctx = canvas.getContext('2d');
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.strokeStyle = '#FFFF00';
+                ctx.lineWidth = 2;
+                const laneWidth = canvas.width / 4;
+                for (let i = 1; i <= 3; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(laneWidth * i, 0);
+                    ctx.lineTo(laneWidth * i, canvas.height);
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#FFFF00';
+                ctx.font = 'bold 16px Arial';
+                ctx.fillText('P1', laneWidth * 0.5, 20);
+                ctx.fillText('P2', laneWidth * 1.5, 20);
+                ctx.fillText('P3', laneWidth * 2.5, 20);
+                ctx.fillText('P4', laneWidth * 3.5, 20);
+
+                const getX = (x) => (1 - x) * canvas.width;
+                const colors = ['red', 'blue', 'green', 'yellow'];
+
+                const posesToDraw = [];
+                for (let i = 1; i <= 4; i++) {
+                    if (this.playerPoses[i]) posesToDraw.push({ pose: this.playerPoses[i], playerIndex: i });
+                }
+
+                const connections = [
+                    [0, 1], [1, 2], [2, 3], [3, 7], [1, 4], [4, 5], [5, 6], [6, 8],
+                    [9, 10], [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21], [17, 19],
+                    [12, 14], [14, 16], [16, 18], [16, 20], [16, 22], [18, 20],
+                    [11, 23], [12, 24], [23, 24], [23, 25], [24, 26], [25, 27], [26, 28],
+                    [27, 29], [28, 30], [29, 31], [30, 32], [27, 31], [28, 32]
+                ];
+
+                posesToDraw.forEach(({ pose, playerIndex }) => {
+                    if (!pose) return;
+                    const color = colors[playerIndex - 1];
+
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2;
+                    connections.forEach(([start, end]) => {
+                        if (pose[start] && pose[end]) {
+                            ctx.beginPath();
+                            ctx.moveTo(getX(pose[start].x), pose[start].y * canvas.height);
+                            ctx.lineTo(getX(pose[end].x), pose[end].y * canvas.height);
+                            ctx.stroke();
+                        }
+                    });
+
+                    ctx.fillStyle = color;
+                    pose.forEach((point) => {
+                        if (point) {
+                            ctx.beginPath();
+                            ctx.arc(getX(point.x), point.y * canvas.height, 3, 0, 2 * Math.PI);
+                            ctx.fill();
+                        }
+                    });
+
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.fillText(`P${playerIndex}`, getX(pose[0].x), (pose[0].y * canvas.height) - 10);
+                });
+
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 14px Arial';
+                ctx.fillText(`检测到 ${posesToDraw.length} 人`, 5, 15);
+            }
+
+            async detectPose() {
+                if (!this.isCameraStarted || !this.videoElement) return;
+
+                try {
+                    if (this.videoElement.readyState >= 2) {
+                        const currentTime = performance.now();
+
+                        if (currentTime - this.lastDetectionTime > this.detectionInterval) {
+                            this.detectionSide = (this.detectionSide + 1) % 4;
+                            this.lastDetectionTime = currentTime;
+                        }
+
+                        const fullWidth = this.videoElement.videoWidth || 640;
+                        const fullHeight = this.videoElement.videoHeight || 480;
+                        const regionWidth = fullWidth / 4;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = fullWidth;
+                        canvas.height = fullHeight;
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, fullWidth, fullHeight);
+
+                        const srcX = this.detectionSide * regionWidth;
+                        ctx.drawImage(this.videoElement, srcX, 0, regionWidth, fullHeight, srcX, 0, regionWidth, fullHeight);
+
+                        await this.pose.send({ image: canvas });
+                    }
+                } catch (error) {
+                    console.error('姿态检测错误:', error);
+                }
+
+                requestAnimationFrame(() => this.detectPose());
+            }
+        }
+
+        const actionCapture = new ActionCapture();
+    </script>
+</body>
+</html>

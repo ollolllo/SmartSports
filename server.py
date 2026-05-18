@@ -1,0 +1,27 @@
+import http.server
+import socketserver
+import os
+
+class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        super().end_headers()
+
+    def guess_type(self, path):
+        base, ext = os.path.splitext(path)
+        if ext == '.tflite':
+            return 'application/octet-stream'
+        return super().guess_type(path)
+
+os.chdir('d:\\projects\\AI自习室\\SmartSports')
+
+PORT = 3001
+
+handler = MyHTTPRequestHandler
+
+with socketserver.TCPServer(("", PORT), handler) as httpd:
+    print(f'Server running at http://localhost:{PORT}/')
+
+    httpd.serve_forever()
