@@ -1,12 +1,15 @@
 import http.server
 import socketserver
 import os
+import time
+import hashlib
 
 class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Cache-Control', 'public, max-age=3600')
         super().end_headers()
 
     def guess_type(self, path):

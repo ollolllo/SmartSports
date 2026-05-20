@@ -634,7 +634,9 @@
                 score: 0,
                 currentRightHandUp: false,
                 avatar: '',
-                isCollisionExpression: false
+                isCollisionExpression: false,
+                lastCanvasWidth: 0,
+                lastCanvasHeight: 0
             };
         }
 
@@ -1397,8 +1399,16 @@
             players.forEach(player => {
                 const canvas = document.getElementById(`fruit-canvas-${player.id}`);
                 if (!canvas) return;
-                canvas.width = player.gameArea.offsetWidth;
-                canvas.height = player.gameArea.offsetHeight;
+                
+                // 只在canvas大小改变时才重新设置
+                const newWidth = player.gameArea.offsetWidth;
+                const newHeight = player.gameArea.offsetHeight;
+                if (newWidth !== player.lastCanvasWidth || newHeight !== player.lastCanvasHeight) {
+                    canvas.width = newWidth;
+                    canvas.height = newHeight;
+                    player.lastCanvasWidth = newWidth;
+                    player.lastCanvasHeight = newHeight;
+                }
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 

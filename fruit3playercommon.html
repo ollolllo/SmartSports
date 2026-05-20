@@ -185,7 +185,9 @@
                 lastSpawnTime: 0,
                 spawnInterval: 900,
                 combo: 0,
-                comboTimer: null
+                comboTimer: null,
+                        lastCanvasWidth: 0,  // 新增
+        lastCanvasHeight: 0  // 新增
             };
         }
 
@@ -685,8 +687,20 @@
             players.forEach(player => {
                 const canvas = document.getElementById(`fruit-canvas-${player.id}`);
                 if (!canvas) return;
-                canvas.width = player.gameArea.offsetWidth;
-                canvas.height = player.gameArea.offsetHeight;
+
+
+                // canvas.width = player.gameArea.offsetWidth;
+                // canvas.height = player.gameArea.offsetHeight;
+        // 新增：只在大小改变时才重新设置 canvas
+        const newWidth = player.gameArea.offsetWidth;
+        const newHeight = player.gameArea.offsetHeight;
+        if (newWidth !== player.lastCanvasWidth || newHeight !== player.lastCanvasHeight) {
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+            player.lastCanvasWidth = newWidth;
+            player.lastCanvasHeight = newHeight;
+        }
+
                 const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
 
