@@ -19,7 +19,9 @@
     },
     "files": [
       "main.js",
-      "package.json"
+      "package.json",
+      "mediapipe/**/*",
+      "common/**/*"
     ],
     "win": {
       "target": [

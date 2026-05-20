@@ -1,4 +1,11 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, protocol, net } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const fsp = require('fs/promises');
+
+protocol.registerSchemesAsPrivileged([
+    { scheme: 'mediapipe', privileges: { standard: true, secure: true, supportFetchAPI: true } }
+]);
 
 const REMOTE_SERVER = 'https://192.168.103.102';
 const ALLOW_DEVTOOLS_FROM_ARGS = true;
@@ -18,6 +25,98 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
     }
     callback(false);
 });
+
+function getActiveMediapipeRoot() {
+    const appPath = app.getAppPath();
+    const asarMediapipePath = path.join(appPath, 'mediapipe');
+    if (fs.existsSync(asarMediapipePath)) {
+        return asarMediapipePath;
+    }
+    const devPath = path.join(__dirname, 'mediapipe');
+    if (fs.existsSync(devPath)) {
+        return devPath;
+    }
+    const userDataPath = path.join(app.getPath('userData'), 'mediapipe');
+    if (fs.existsSync(userDataPath)) {
+        return userDataPath;
+    }
+    console.warn('[mediapipe] No mediapipe path found, falling back to app path:', appPath);
+    return path.join(appPath, 'mediapipe');
+}
+
+function fileExists(filePath) {
+    try {
+        return fs.existsSync(filePath) && fs.statSync(filePath).isFile();
+    } catch {
+        return false;
+    }
+}
+
+function getMimeType(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+        '.js': 'application/javascript',
+        '.mjs': 'application/javascript',
+        '.wasm': 'application/wasm',
+        '.tflite': 'application/octet-stream',
+        '.binarypb': 'application/octet-stream',
+        '.data': 'application/octet-stream',
+        '.json': 'application/json',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg'
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+}
+
+function setupMediapipeProtocol() {
+    protocol.handle('mediapipe', async (request) => {
+        const url = new URL(request.url);
+        const relativePath = decodeURIComponent(url.pathname).replace(/^\/local\//, '');
+        const mediapipeRoot = getActiveMediapipeRoot();
+        let localPath = path.join(mediapipeRoot, relativePath);
+        
+        if (relativePath.startsWith('pose/') && !fileExists(localPath)) {
+            const fallbackPath = path.join(mediapipeRoot, path.basename(relativePath));
+            if (fileExists(fallbackPath)) {
+                localPath = fallbackPath;
+            }
+        }
+        
+        if (!fileExists(localPath)) {
+            return new Response('File not found', { status: 404 });
+        }
+        
+        try {
+            const fileContent = await fsp.readFile(localPath);
+            const mimeType = getMimeType(localPath);
+            return new Response(fileContent, {
+                status: 200,
+                headers: {
+                    'Content-Type': mimeType,
+                    'Access-Control-Allow-Origin': '*'
+                }
+            });
+        } catch (error) {
+            console.error('[mediapipe] Failed to serve file:', localPath, error);
+            return new Response('Internal server error', { status: 500 });
+        }
+    });
+    console.log('[mediapipe] Protocol registered');
+}
+
+function redirectMediapipeToLocal(session) {
+    session.webRequest.onBeforeRequest(
+        { urls: [`${REMOTE_SERVER}/mediapipe/*`] },
+        (details, callback) => {
+            const requestUrl = new URL(details.url);
+            let relativePath = requestUrl.pathname.replace(/^\/mediapipe\//, '');
+            const mediapipeUrl = `mediapipe://local/${relativePath}`;
+            console.log('[mediapipe] Redirect:', details.url, '->', mediapipeUrl);
+            callback({ redirectURL: mediapipeUrl });
+        }
+    );
+}
 
 function allowCameraPermissions(session) {
     session.setPermissionRequestHandler((webContents, permission, callback) => {
@@ -125,6 +224,7 @@ function createWindow() {
     });
 
     allowCameraPermissions(win.webContents.session);
+    redirectMediapipeToLocal(win.webContents.session);
 
     win.webContents.on('before-input-event', (event, input) => {
         const key = input.key.toLowerCase();
@@ -222,6 +322,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    setupMediapipeProtocol();
     createWindow();
 
     app.on('activate', () => {
