@@ -1,7 +1,7 @@
 const { app, BrowserWindow } = require('electron');
 
 const REMOTE_SERVER = 'https://192.168.103.102';
-const ALLOW_DEVTOOLS_FROM_ARGS = false;
+const ALLOW_DEVTOOLS_FROM_ARGS = true;
 const ENABLE_DEVTOOLS = ALLOW_DEVTOOLS_FROM_ARGS && process.argv.includes('--devtools');
 
 app.commandLine.appendSwitch('ignore-certificate-errors');

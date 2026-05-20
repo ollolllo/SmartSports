@@ -17,7 +17,7 @@ class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 os.chdir('d:\\projects\\AI自习室\\SmartSports')
 
-PORT = 3001
+PORT = 3000
 
 handler = MyHTTPRequestHandler
 
