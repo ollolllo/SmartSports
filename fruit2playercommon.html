@@ -640,7 +640,9 @@
                 score: 0,                          // 当前积分
                 currentRightHandUp: false,          // 右手是否举起
                 avatar: '',                        // 玩家头像
-                isCollisionExpression: false       // 是否触发碰撞表情
+                isCollisionExpression: false,       // 是否触发碰撞表情
+                lastCanvasWidth: 0,                // 新增：上次 canvas 宽度
+                lastCanvasHeight: 0                // 新增：上次 canvas 高度
             };
         }
 
@@ -1364,9 +1366,15 @@
                 const canvas = document.getElementById(`fruit-canvas-${player.id}`);
                 if (!canvas) return;
 
-                // 设置canvas尺寸为玩家区域大小
-                canvas.width = player.gameArea.offsetWidth;
-                canvas.height = player.gameArea.offsetHeight;
+                // 只在canvas大小改变时才重新设置
+                const newWidth = player.gameArea.offsetWidth;
+                const newHeight = player.gameArea.offsetHeight;
+                if (newWidth !== player.lastCanvasWidth || newHeight !== player.lastCanvasHeight) {
+                    canvas.width = newWidth;
+                    canvas.height = newHeight;
+                    player.lastCanvasWidth = newWidth;
+                    player.lastCanvasHeight = newHeight;
+                }
                 const ctx = canvas.getContext('2d');
 
                 // 1. 清空画布
